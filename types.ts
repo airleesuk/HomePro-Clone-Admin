@@ -1,6 +1,17 @@
+
+export interface ProductVariant {
+  id: string;
+  name: string;
+  sku: string;
+  price: number;
+  stock: number;
+}
+
 export interface Product {
   id: number;
   name: string;
+  brand?: string;
+  sku?: string;
   price: number;
   originalPrice?: number;
   image: string;
@@ -9,13 +20,24 @@ export interface Product {
   sold: number;
   discount?: number;
   isFlashSale?: boolean;
+  isFeatured?: boolean;
+  tags?: string[];
   rating?: number;
+  description?: string;
+  weight?: number;
+  dimensions?: string;
+  variants?: ProductVariant[];
+  // SEO Fields
+  seoUrl?: string;
+  seoKeywords?: string[];
+  seoDescription?: string;
 }
 
 export interface Category {
   id: number;
   name: string;
-  icon: string; // URL or Lucide icon name placeholder
+  icon: string;
+  isActive?: boolean;
 }
 
 export interface Banner {

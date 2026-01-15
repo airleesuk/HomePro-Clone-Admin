@@ -1,58 +1,135 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { db, CATEGORIES } from '../services/mockDb';
-import { Product } from '../types';
-import { LayoutDashboard, Package, Tag, Settings, Plus, Trash2, Edit, Save, X, ArrowUpDown, ArrowUp, ArrowDown, Filter, Zap, Database, FileDown, Play, Terminal, ChevronLeft, ChevronRight, Search } from 'lucide-react';
+
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { db } from '../services/mockDb';
+import { Product, ProductVariant, Category } from '../types';
+import { 
+  Package, Plus, Trash2, Edit, Save, X, 
+  Zap, Database, Terminal, 
+  Search, AlertCircle, Box, Layers, 
+  Trash, ShieldAlert, Star, PlusCircle, CheckSquare, 
+  Square, Globe, Wand2, List, Info, BarChart3, 
+  Archive, Eye, EyeOff, Truck, Ruler, Weight, CheckCircle2,
+  Code, Play, RotateCcw, Copy, Check
+} from 'lucide-react';
 
 export const AdminPage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  // Category management state
+  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const [categoryFormData, setCategoryFormData] = useState<Partial<Category>>({
+    name: '',
+    icon: '',
+    isActive: true
+  });
   
+  // Confirmation Modals
+  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<'products' | 'categories' | null>(null);
+  
+  const [tagInput, setTagInput] = useState('');
+  const [seoKeywordInput, setSeoKeywordInput] = useState('');
+
+  // Selection/Bulk Actions Products
+  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
+
+  // Selection/Bulk Actions Categories
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
+
   // Navigation State
-  const [activeTab, setActiveTab] = useState<'products' | 'database'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'database'>('products');
 
   // Sorting State
   const [sortConfig, setSortConfig] = useState<{ key: keyof Product; direction: 'asc' | 'desc' } | null>(null);
   
   // Filter State
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('All');
+  const [filterStock, setFilterStock] = useState<'all' | 'low' | 'out'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const ITEMS_PER_PAGE = 8;
+  // SQL Terminal State
+  const [sqlCommand, setSqlCommand] = useState("SELECT * FROM products WHERE stock < 10;");
+  const [sqlResult, setSqlResult] = useState<any[]>([]);
+  const [isExecutingSql, setIsExecutingSql] = useState(false);
+  const [sqlLog, setSqlLog] = useState<string[]>(["Core System Initialized...", "Awaiting Sequence Command..."]);
+  const terminalEndRef = useRef<HTMLDivElement>(null);
 
-  // SQL State
-  const [sqlQuery, setSqlQuery] = useState("SELECT * FROM products");
-  const [queryResult, setQueryResult] = useState<any[] | null>(null);
-  const [queryError, setQueryError] = useState<string | null>(null);
-
-  // Form State
+  // Product Form State
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
+    brand: '',
+    sku: '',
     price: 0,
     category: '',
     stock: 0,
+    description: '',
+    weight: 0,
+    dimensions: '',
+    image: '',
+    isFeatured: false,
+    tags: [],
+    variants: [],
+    seoUrl: '',
+    seoKeywords: [],
+    seoDescription: ''
   });
 
   useEffect(() => {
     refreshData();
   }, []);
 
+  useEffect(() => {
+    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [sqlLog]);
+
   const refreshData = () => {
     setProducts([...db.getProducts()]);
+    setCategories([...db.getCategories()]);
   };
 
-  const handleDelete = (id: number) => {
-    if (confirm('คุณแน่ใจหรือไม่ที่จะลบสินค้านี้?')) {
-      db.deleteProduct(id);
+  const stats = useMemo(() => {
+    const total = products.length;
+    const inventoryValue = products.reduce((acc, p) => acc + (p.stock * (p.price || 0)), 0);
+    const lowStock = products.filter(p => p.stock > 0 && p.stock < 10).length;
+    const totalSold = products.reduce((acc, p) => acc + (p.sold || 0), 0);
+    return { total, lowStock, inventoryValue, totalSold };
+  }, [products]);
+
+  const confirmDelete = () => {
+    if (deleteConfirmId !== null) {
+      db.deleteProduct(deleteConfirmId);
+      setDeleteConfirmId(null);
       refreshData();
     }
   };
 
+  const handleBulkDelete = () => {
+    if (bulkDeleteConfirm === 'products') {
+      db.bulkDeleteProducts(selectedProductIds);
+      setSelectedProductIds([]);
+    } else if (bulkDeleteConfirm === 'categories') {
+      db.bulkDeleteCategories(selectedCategoryIds);
+      setSelectedCategoryIds([]);
+    }
+    setBulkDeleteConfirm(null);
+    refreshData();
+  };
+
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
-    setFormData(product);
+    setFormData({
+      ...product,
+      tags: product.tags || [],
+      variants: product.variants || [],
+      seoKeywords: product.seoKeywords || [],
+      seoDescription: product.seoDescription || ''
+    });
+    setTagInput('');
+    setSeoKeywordInput('');
     setIsModalOpen(true);
   };
 
@@ -60,14 +137,27 @@ export const AdminPage: React.FC = () => {
     setEditingProduct(null);
     setFormData({
        name: '',
+       brand: '',
+       sku: `SKU-${Date.now().toString().slice(-6)}`,
        price: 0,
-       category: CATEGORIES[0]?.name || 'เฟอร์นิเจอร์',
+       category: categories[0]?.name || 'เครื่องใช้ไฟฟ้า',
        stock: 10,
-       image: 'https://images.unsplash.com/photo-1556911220-e15b29be8c8f?w=400', // Default placeholder
+       image: 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=400',
        sold: 0,
        discount: 0,
-       isFlashSale: false
+       isFlashSale: false,
+       isFeatured: false,
+       tags: [],
+       description: '',
+       weight: 0,
+       dimensions: '',
+       variants: [],
+       seoUrl: '',
+       seoKeywords: [],
+       seoDescription: ''
     });
+    setTagInput('');
+    setSeoKeywordInput('');
     setIsModalOpen(true);
   };
 
@@ -82,706 +172,670 @@ export const AdminPage: React.FC = () => {
     refreshData();
   };
 
-  // Sorting Logic
-  const handleSort = (key: keyof Product) => {
-    let direction: 'asc' | 'desc' = 'asc';
-    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
+  const updateVariant = (id: string, field: keyof ProductVariant, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      variants: prev.variants?.map(v => v.id === id ? { ...v, [field]: value } : v)
+    }));
+  };
+
+  const generateSEO = () => {
+    if (!formData.name) return;
+    const brandPart = formData.brand ? `${formData.brand}-` : '';
+    const slug = `${brandPart}${formData.name}`.toLowerCase().trim().replace(/[^\w\sก-๙\-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
+    let finalDesc = (formData.seoDescription || '').trim();
+    if (!finalDesc) {
+      finalDesc = (formData.description || '').replace(/<[^>]*>?/gm, '').substring(0, 150) + '...';
     }
-    setSortConfig({ key, direction });
+    setFormData(prev => ({ ...prev, seoUrl: slug, seoDescription: finalDesc.substring(0, 160) }));
   };
 
   const processedProducts = useMemo(() => {
     let result = [...products];
-
-    // Filter by Category
-    if (selectedCategory !== 'All') {
-      result = result.filter(p => p.category === selectedCategory);
-    }
-
-    // Filter by Search
+    if (selectedCategoryFilter !== 'All') result = result.filter(p => p.category === selectedCategoryFilter);
+    if (filterStock === 'low') result = result.filter(p => p.stock > 0 && p.stock < 10);
+    if (filterStock === 'out') result = result.filter(p => p.stock === 0);
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase();
-      result = result.filter(p => 
-        p.name.toLowerCase().includes(lowerQuery) || 
-        p.id.toString().includes(lowerQuery)
-      );
+      result = result.filter(p => p.name.toLowerCase().includes(lowerQuery) || p.brand?.toLowerCase().includes(lowerQuery) || p.sku?.toLowerCase().includes(lowerQuery));
     }
+    return result;
+  }, [products, selectedCategoryFilter, filterStock, searchQuery]);
 
-    // Sort
-    if (!sortConfig) return result;
+  const handleInlineStockUpdate = (product: Product, newStock: number) => {
+    if (newStock < 0) newStock = 0;
+    const updatedProduct = { ...product, stock: newStock };
+    setProducts(prev => prev.map(p => p.id === product.id ? updatedProduct : p));
+    db.updateProduct(updatedProduct);
+  };
+
+  const executeSql = () => {
+    if (!sqlCommand.trim()) return;
+    setIsExecutingSql(true);
+    setSqlLog(prev => [...prev, `> ${sqlCommand}`]);
     
-    return result.sort((a, b) => {
-      const aVal = a[sortConfig.key];
-      const bVal = b[sortConfig.key];
-
-      if (aVal === undefined || bVal === undefined) return 0;
-
-      if (typeof aVal === 'string' && typeof bVal === 'string') {
-        return sortConfig.direction === 'asc' 
-          ? aVal.localeCompare(bVal, 'th') 
-          : bVal.localeCompare(aVal, 'th');
+    setTimeout(() => {
+      setIsExecutingSql(false);
+      const lowerCmd = sqlCommand.toLowerCase();
+      if (lowerCmd.includes('select')) {
+        let results = [...products];
+        if (lowerCmd.includes('where stock < 10')) results = products.filter(p => p.stock < 10);
+        setSqlResult(results.slice(0, 5));
+        setSqlLog(prev => [...prev, `Success: ${results.length} rows returned.`]);
+      } else {
+        setSqlLog(prev => [...prev, `Error: Operation not permitted in read-only console.`]);
       }
-      
-      if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
-      return 0;
-    });
-  }, [products, sortConfig, selectedCategory, searchQuery]);
-
-  // Pagination Logic
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [selectedCategory, searchQuery, products.length]);
-
-  const totalPages = Math.ceil(processedProducts.length / ITEMS_PER_PAGE);
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const paginatedProducts = processedProducts.slice(startIndex, startIndex + ITEMS_PER_PAGE);
-
-  const SortIndicator = ({ column }: { column: keyof Product }) => {
-    if (sortConfig?.key !== column) {
-      return <ArrowUpDown size={14} className="ml-1 text-blue-200 inline" />;
-    }
-    return sortConfig.direction === 'asc' 
-      ? <ArrowUp size={14} className="ml-1 text-blue-600 inline" /> 
-      : <ArrowDown size={14} className="ml-1 text-blue-600 inline" />;
+    }, 600);
   };
 
-  // SQL Handlers
-  const handleRunQuery = () => {
-    setQueryError(null);
-    setQueryResult(null);
-    try {
-        const lowerQ = sqlQuery.trim().toLowerCase();
-        
-        if (!lowerQ.startsWith('select')) throw new Error("Only SELECT queries are supported in this demo.");
-        if (!lowerQ.includes('from products')) throw new Error("Table not found. Try 'FROM products'.");
-
-        let filtered = [...products];
-
-        // Simple WHERE parser
-        if (lowerQ.includes('where')) {
-            const wherePart = lowerQ.split('where')[1].split('order by')[0].trim();
-            if (wherePart.includes('>')) {
-                const [field, val] = wherePart.split('>').map(s => s.trim());
-                filtered = filtered.filter(p => (p as any)[field] > Number(val));
-            } else if (wherePart.includes('<')) {
-                const [field, val] = wherePart.split('<').map(s => s.trim());
-                filtered = filtered.filter(p => (p as any)[field] < Number(val));
-            } else if (wherePart.includes('=')) {
-                const [field, val] = wherePart.split('=').map(s => s.trim());
-                const cleanVal = val.replace(/['"]/g, '');
-                filtered = filtered.filter(p => String((p as any)[field]).toLowerCase() === cleanVal.toLowerCase());
-            }
-        }
-
-        // Simple ORDER BY parser
-        if (lowerQ.includes('order by')) {
-            const orderPart = lowerQ.split('order by')[1].trim();
-            const parts = orderPart.split(' ');
-            const field = parts[0];
-            const dir = parts[1] || 'asc';
-            const direction = dir === 'desc' ? -1 : 1;
-            filtered.sort((a, b) => {
-                if ((a as any)[field] > (b as any)[field]) return 1 * direction;
-                if ((a as any)[field] < (b as any)[field]) return -1 * direction;
-                return 0;
-            });
-        }
-        
-        // Simple SELECT Columns
-        const selectPart = lowerQ.split('from')[0].replace('select', '').trim();
-        if (selectPart !== '*') {
-            const columns = selectPart.split(',').map(c => c.trim());
-            const mapped = filtered.map(p => {
-                const newObj: any = {};
-                columns.forEach(c => {
-                    if ((p as any)[c] !== undefined) newObj[c] = (p as any)[c];
-                });
-                return newObj;
-            });
-            setQueryResult(mapped);
-        } else {
-            setQueryResult(filtered);
-        }
-
-    } catch (err: any) {
-        setQueryError(err.message || "Invalid SQL syntax");
-    }
+  const toggleSelectAllProducts = () => {
+    if (selectedProductIds.length === processedProducts.length) setSelectedProductIds([]);
+    else setSelectedProductIds(processedProducts.map(p => p.id));
   };
 
-  const handleExportSQL = () => {
-    const headers = ['id', 'name', 'price', 'category', 'stock', 'sold', 'isFlashSale', 'discount'];
-    let sql = `CREATE TABLE products (\n  ${headers.join(' VARCHAR(255),\n  ')} VARCHAR(255)\n);\n\n`;
-    
-    products.forEach(p => {
-      const values = headers.map(h => {
-        const val = (p as any)[h];
-        if (typeof val === 'string') return `'${val.replace(/'/g, "''")}'`;
-        if (typeof val === 'boolean') return val ? 1 : 0;
-        return val === undefined ? 'NULL' : val;
-      });
-      sql += `INSERT INTO products (${headers.join(', ')}) VALUES (${values.join(', ')});\n`;
-    });
+  const toggleSelectOneProduct = (id: number) => {
+    setSelectedProductIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
 
-    const blob = new Blob([sql], { type: 'text/sql' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'homepro_db_dump.sql';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+  const toggleSelectAllCategories = () => {
+    if (selectedCategoryIds.length === categories.length) setSelectedCategoryIds([]);
+    else setSelectedCategoryIds(categories.map(c => c.id));
+  };
+
+  const toggleSelectOneCategory = (id: number) => {
+    setSelectedCategoryIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+  };
+
+  const handleBulkCategoryAction = (action: 'enable' | 'disable' | 'delete') => {
+    if (action === 'enable') {
+      db.bulkUpdateCategoryStatus(selectedCategoryIds, true);
+      setSelectedCategoryIds([]);
+    } else if (action === 'disable') {
+      db.bulkUpdateCategoryStatus(selectedCategoryIds, false);
+      setSelectedCategoryIds([]);
+    } else if (action === 'delete') {
+      setBulkDeleteConfirm('categories');
+    }
+    refreshData();
   };
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-800 font-sans">
-      {/* Sidebar - Premium Dark Blue Gradient */}
-      <aside className="w-72 bg-gradient-to-b from-[#0f172a] via-[#1e3a8a] to-[#0f172a] text-white flex flex-col shadow-2xl relative overflow-hidden transition-all duration-300 z-20 shrink-0 hidden lg:flex">
-        {/* Decorative elements */}
-        <div className="absolute -top-20 -right-20 w-48 h-48 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute bottom-0 left-0 w-full h-32 bg-gradient-to-t from-black/20 to-transparent pointer-events-none"></div>
-
-        {/* Brand */}
-        <div className="p-8 pb-6 border-b border-white/10 relative z-10">
-          <div className="flex items-center gap-3">
-             <div className="bg-gradient-to-br from-blue-500 to-blue-600 p-2.5 rounded-xl shadow-lg shadow-blue-600/30">
-                <LayoutDashboard size={24} className="text-white" />
+    <div className="flex h-screen bg-[#f1f5f9] text-slate-800 font-sans overflow-hidden">
+      {/* Sidebar Navigation */}
+      <aside className="w-80 bg-[#001f3f] text-white flex flex-col shadow-2xl shrink-0 hidden lg:flex relative z-30">
+        <div className="p-10 border-b border-white/10">
+          <div className="flex items-center gap-4">
+             <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-500/20">
+               <Database size={28} className="text-white" />
              </div>
              <div>
-               <div className="text-xl font-bold tracking-wider text-white leading-none">
-                  WAREE<span className="text-blue-400">-TH</span>
-               </div>
-               <div className="text-[10px] text-blue-200/70 font-medium tracking-widest mt-1">ADMIN SYSTEM</div>
+               <div className="font-black text-2xl tracking-tighter uppercase leading-none">WAREE</div>
+               <div className="text-[10px] text-blue-400 font-black tracking-[0.4em] uppercase opacity-60 mt-2">Core Registry</div>
              </div>
           </div>
         </div>
-
-        {/* Menu */}
-        <nav className="flex-1 p-5 space-y-2 mt-2 overflow-y-auto no-scrollbar z-10">
-          <div className="text-xs font-bold text-blue-300/50 uppercase tracking-widest mb-4 px-3">Main Menu</div>
-          
-          <button 
-            onClick={() => setActiveTab('products')}
-            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 group relative overflow-hidden ${
-              activeTab === 'products' 
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/40 translate-x-1' 
-              : 'text-blue-100/70 hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            <div className={`absolute left-0 top-0 bottom-0 w-1 bg-blue-300 ${activeTab === 'products' ? 'opacity-100' : 'opacity-0'} transition-opacity`}></div>
-            <Package size={20} className={`transition-transform duration-300 ${activeTab === 'products' ? 'scale-110' : 'group-hover:scale-110'}`} /> 
-            <span className="font-medium">Product Store</span>
+        <nav className="flex-1 p-8 space-y-3 mt-6">
+          <button onClick={() => setActiveTab('products')} className={`w-full flex items-center gap-4 px-6 py-5 rounded-[2rem] transition-all group ${activeTab === 'products' ? 'bg-blue-600 text-white shadow-2xl shadow-blue-600/30' : 'text-blue-200/50 hover:bg-white/5 hover:text-white'}`}>
+            <Package size={22} className={activeTab === 'products' ? 'animate-pulse' : ''} /> 
+            <span className="font-black text-sm uppercase tracking-widest">Product Matrix</span>
           </button>
-          
-          <button 
-            onClick={() => setActiveTab('database')}
-            className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl transition-all duration-300 group relative overflow-hidden ${
-              activeTab === 'database' 
-              ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/40 translate-x-1' 
-              : 'text-blue-100/70 hover:bg-white/5 hover:text-white'
-            }`}
-          >
-            <div className={`absolute left-0 top-0 bottom-0 w-1 bg-blue-300 ${activeTab === 'database' ? 'opacity-100' : 'opacity-0'} transition-opacity`}></div>
-            <Database size={20} className={`transition-transform duration-300 ${activeTab === 'database' ? 'scale-110' : 'group-hover:scale-110'}`} /> 
-            <span className="font-medium">SQL Database</span>
-            <span className="text-[10px] bg-blue-400/20 text-blue-200 border border-blue-400/30 px-1.5 py-0.5 rounded ml-auto">PRO</span>
+          <button onClick={() => setActiveTab('categories')} className={`w-full flex items-center gap-4 px-6 py-5 rounded-[2rem] transition-all group ${activeTab === 'categories' ? 'bg-blue-600 text-white shadow-2xl shadow-blue-600/30' : 'text-blue-200/50 hover:bg-white/5 hover:text-white'}`}>
+            <List size={22} /> 
+            <span className="font-black text-sm uppercase tracking-widest">Taxonomy Hub</span>
           </button>
-
-          <div className="pt-6 mt-6 border-t border-white/5">
-             <div className="text-xs font-bold text-blue-300/50 uppercase tracking-widest mb-4 px-3">Applications</div>
-             {['Dashboard', 'Orders', 'Settings'].map((item, idx) => {
-                 const icons = [LayoutDashboard, Tag, Settings];
-                 const Icon = icons[idx];
-                 return (
-                    <button key={item} className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-blue-100/40 cursor-not-allowed hover:bg-white/5 transition-colors group">
-                        <Icon size={18} className="group-hover:text-blue-200 transition-colors" /> 
-                        <span className="font-medium">{item}</span>
-                    </button>
-                 )
-             })}
-          </div>
+          <button onClick={() => setActiveTab('database')} className={`w-full flex items-center gap-4 px-6 py-5 rounded-[2rem] transition-all group ${activeTab === 'database' ? 'bg-blue-600 text-white shadow-2xl shadow-blue-600/30' : 'text-blue-200/50 hover:bg-white/5 hover:text-white'}`}>
+            <Terminal size={22} /> 
+            <span className="font-black text-sm uppercase tracking-widest">SQL Terminal</span>
+          </button>
         </nav>
-        
-        {/* User Card */}
-        <div className="p-4 mx-4 mb-4 bg-white/5 backdrop-blur-sm rounded-2xl border border-white/10">
-            <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-blue-400 to-indigo-600 flex items-center justify-center text-white font-bold shadow-md border-2 border-white/10">
-                    AD
+        <div className="p-10 border-t border-white/10 bg-black/10">
+           <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-[1.5rem] bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center font-black text-xl border border-white/20 shadow-lg">A</div>
+              <div>
+                <div className="text-xs font-black uppercase tracking-widest">Root Architect</div>
+                <div className="text-[9px] text-blue-400/50 font-black uppercase tracking-tighter mt-1 flex items-center gap-1">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></div> Online Status
                 </div>
-                <div>
-                    <div className="text-sm font-bold text-white">Administrator</div>
-                    <div className="text-xs text-blue-300/80">admin@waree-th.com</div>
-                </div>
-            </div>
+              </div>
+           </div>
         </div>
       </aside>
 
-      {/* Main Content */}
-      <main className="flex-1 overflow-y-auto relative bg-[#f8fafc] flex flex-col">
-        {/* Subtle background decoration */}
-        <div className="absolute top-0 left-0 w-full h-80 bg-gradient-to-b from-blue-100/40 to-transparent pointer-events-none"></div>
-
-        {activeTab === 'products' ? (
-            <>
-                {/* Header */}
-                <header className="px-8 py-6 sticky top-0 z-10 flex flex-col md:flex-row justify-between items-start md:items-center backdrop-blur-xl bg-white/80 border-b border-blue-100 shadow-sm transition-all gap-4">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-800 tracking-tight">Product Management</h1>
-                        <p className="text-slate-500 text-sm mt-1">Manage your store inventory and prices</p>
-                    </div>
-                    
-                    <div className="flex items-center gap-3 w-full md:w-auto">
-                        <div className="relative group w-full md:w-64">
-                            <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 group-hover:text-blue-500 transition-colors" />
-                            <input 
-                              type="text" 
-                              placeholder="Search..." 
-                              value={searchQuery}
-                              onChange={(e) => setSearchQuery(e.target.value)}
-                              className="w-full bg-white border border-blue-200 text-slate-700 pl-10 pr-4 py-2.5 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                            />
-                        </div>
-
-                        <div className="relative group hidden sm:block">
-                            <select
-                                value={selectedCategory}
-                                onChange={(e) => setSelectedCategory(e.target.value)}
-                                className="bg-white border border-blue-200 text-slate-700 pl-10 pr-10 py-2.5 rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all appearance-none cursor-pointer hover:border-blue-300"
-                            >
-                                <option value="All">All Categories</option>
-                                {CATEGORIES.map(category => (
-                                    <option key={category.id} value={category.name}>{category.name}</option>
-                                ))}
-                            </select>
-                            <Filter size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-blue-400 group-hover:text-blue-500 transition-colors" />
-                            <ArrowDown size={14} className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-                        </div>
-
-                        <button 
-                            onClick={handleAddNew}
-                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white pl-4 pr-5 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg shadow-blue-500/30 transform hover:-translate-y-0.5 whitespace-nowrap"
-                        >
-                            <Plus size={18} strokeWidth={2.5} /> 
-                            <span className="font-medium">Add Product</span>
+      <main className="flex-1 overflow-y-auto bg-[#f8fafc] flex flex-col no-scrollbar scroll-smooth">
+        {activeTab === 'products' && (
+          <div className="p-10 space-y-10">
+            <header className="flex justify-between items-center bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
+                <div>
+                  <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-3">Inventory Matrix</h1>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.5em] flex items-center gap-2">
+                    <Archive size={14} /> Master Registry Control
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                    {selectedProductIds.length > 0 && (
+                      <div className="flex items-center gap-3 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100 animate-in slide-in-from-right">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">{selectedProductIds.length} Selected</span>
+                        <button onClick={() => setBulkDeleteConfirm('products')} className="text-red-500 hover:bg-red-50 p-2 rounded-lg" title="Bulk Delete">
+                          <Trash size={20} />
                         </button>
-                    </div>
-                </header>
+                      </div>
+                    )}
+                    <button onClick={handleAddNew} className="bg-blue-600 text-white px-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest flex items-center gap-3 shadow-2xl shadow-blue-600/30 hover:shadow-blue-600/50 hover:-translate-y-1 transition-all">
+                      <PlusCircle size={22} /> New Registry Entry
+                    </button>
+                </div>
+            </header>
 
-                <div className="p-4 md:p-8 relative z-0 flex-1 overflow-x-auto">
-                    <div className="bg-white rounded-2xl shadow-xl shadow-slate-200/50 overflow-hidden border border-slate-100 min-w-[800px]">
-                        <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50/80 text-slate-600 uppercase text-xs font-bold tracking-wider">
+            {/* Performance Stats */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                {[
+                  { label: "Density", value: stats.total, icon: Box, color: "blue" },
+                  { label: "Critical", value: stats.lowStock, icon: AlertCircle, color: "red" },
+                  { label: "Velocity", value: stats.totalSold, icon: BarChart3, color: "emerald" },
+                  { label: "Equity", value: `฿${(stats.inventoryValue / 1000000).toFixed(1)}M`, icon: Zap, color: "amber" }
+                ].map((card, i) => (
+                  <div key={i} className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-soft flex items-center gap-6">
+                      <div className={`w-16 h-16 bg-${card.color}-50 text-${card.color}-600 rounded-[1.5rem] flex items-center justify-center shadow-inner`}>
+                          <card.icon size={28} />
+                      </div>
+                      <div>
+                          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">{card.label}</div>
+                          <div className="text-3xl font-black text-slate-900 leading-tight">{card.value}</div>
+                      </div>
+                  </div>
+                ))}
+            </div>
+
+            {/* Product Table */}
+            <div className="bg-white rounded-[4rem] shadow-2xl border border-slate-100 overflow-hidden">
+                <div className="px-10 py-8 border-b bg-slate-50/50 flex gap-6 items-center">
+                    <div className="relative flex-1 group">
+                        <Search size={20} className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
+                        <input type="text" placeholder="Query Matrix..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-white border border-slate-200 pl-14 pr-8 py-5 rounded-[2rem] text-sm font-bold outline-none focus:ring-8 focus:ring-blue-500/5 shadow-inner" />
+                    </div>
+                    <select value={selectedCategoryFilter} onChange={e => setSelectedCategoryFilter(e.target.value)} className="bg-white border border-slate-200 px-8 py-5 rounded-[2rem] text-xs font-black uppercase tracking-widest outline-none shadow-sm cursor-pointer hover:bg-slate-50 transition-all">
+                      <option value="All">All Clusters</option>
+                      {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                        <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
                             <tr>
-                            <th 
-                                className="p-5 cursor-pointer hover:bg-blue-50/50 transition-colors"
-                                onClick={() => handleSort('id')}
-                            >
-                                <div className="flex items-center gap-2">ID <SortIndicator column="id" /></div>
-                            </th>
-                            <th 
-                                className="p-5 cursor-pointer hover:bg-blue-50/50 transition-colors"
-                                onClick={() => handleSort('name')}
-                            >
-                                <div className="flex items-center gap-2">Product Name <SortIndicator column="name" /></div>
-                            </th>
-                            <th 
-                                className="p-5 cursor-pointer hover:bg-blue-50/50 transition-colors"
-                                onClick={() => handleSort('category')}
-                            >
-                                <div className="flex items-center gap-2">Category <SortIndicator column="category" /></div>
-                            </th>
-                            <th 
-                                className="p-5 text-right cursor-pointer hover:bg-blue-50/50 transition-colors"
-                                onClick={() => handleSort('price')}
-                            >
-                                <div className="flex items-center justify-end gap-2">Price <SortIndicator column="price" /></div>
-                            </th>
-                            <th 
-                                className="p-5 text-center cursor-pointer hover:bg-blue-50/50 transition-colors"
-                                onClick={() => handleSort('stock')}
-                            >
-                                <div className="flex items-center justify-center gap-2">Stock <SortIndicator column="stock" /></div>
-                            </th>
-                            <th className="p-5 text-center">Actions</th>
+                                <th className="px-10 py-8 w-12 text-center border-b">
+                                  <button onClick={toggleSelectAllProducts} className="text-blue-600">
+                                    {selectedProductIds.length === processedProducts.length && processedProducts.length > 0 ? <CheckSquare size={24} /> : <Square size={24} />}
+                                  </button>
+                                </th>
+                                <th className="px-10 py-8 border-b">Product Hierarchy</th>
+                                <th className="px-10 py-8 border-b">Logistics</th>
+                                <th className="px-10 py-8 border-b text-right">Unit Point</th>
+                                <th className="px-10 py-8 border-b text-center">Engine</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {paginatedProducts.length > 0 ? (
-                            paginatedProducts.map((product) => (
-                                <tr key={product.id} className="hover:bg-blue-50/40 transition-colors group">
-                                    <td className="p-5 text-slate-500 font-medium text-sm">#{product.id}</td>
-                                    <td className="p-5">
-                                        <div className="flex items-center gap-4">
-                                            <div className="w-12 h-12 rounded-lg overflow-hidden border border-slate-200 shadow-sm flex-shrink-0 bg-white">
-                                                <img src={product.image} className="w-full h-full object-contain p-1" alt="" />
+                            {processedProducts.map(p => (
+                                <tr key={p.id} className="group hover:bg-blue-50/20 transition-all">
+                                    <td className="px-10 py-6 text-center">
+                                      <button onClick={() => toggleSelectOneProduct(p.id)} className="text-blue-600">
+                                        {selectedProductIds.includes(p.id) ? <CheckSquare size={20} /> : <Square size={20} className="text-slate-200" />}
+                                      </button>
+                                    </td>
+                                    <td className="px-10 py-6">
+                                        <div className="flex items-center gap-6">
+                                            <div className="w-16 h-16 rounded-[1.5rem] bg-slate-50 p-2 border border-slate-100 shrink-0 overflow-hidden relative">
+                                                <img src={p.image} className="w-full h-full object-contain mix-blend-multiply" alt={p.name} />
+                                                {p.isFeatured && <div className="absolute top-0 right-0 bg-amber-400 text-white p-1 rounded-bl-xl shadow-sm"><Star size={10} fill="currentColor" /></div>}
                                             </div>
-                                            <div className="font-semibold text-slate-800 group-hover:text-blue-600 transition-colors">{product.name}</div>
+                                            <div>
+                                                <div className="font-black text-slate-900 text-sm leading-none mb-2">{p.name}</div>
+                                                <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{p.sku} | {p.category}</div>
+                                            </div>
                                         </div>
                                     </td>
-                                    <td className="p-5">
-                                        <div className="flex flex-col items-start gap-1">
-                                            <span className="bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-1 rounded-md border border-blue-200">{product.category}</span>
-                                            {product.isFlashSale && (
-                                                <span className="bg-orange-100 text-orange-600 text-[10px] font-bold px-2 py-0.5 rounded-md flex items-center gap-1 border border-orange-200">
-                                                    <Zap size={10} className="fill-orange-600" /> Flash Sale
-                                                </span>
-                                            )}
+                                    <td className="px-10 py-6">
+                                        <div className="flex flex-col gap-2">
+                                          <div className={`text-[8px] font-black uppercase px-2 py-1 rounded w-fit ${p.stock < 10 ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'}`}>
+                                            {p.stock < 10 ? 'Low Stock' : 'Optimal'}
+                                          </div>
+                                          <input type="number" min="0" className="w-20 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-black text-center" value={p.stock} onChange={(e) => handleInlineStockUpdate(p, parseInt(e.target.value) || 0)} />
                                         </div>
                                     </td>
-                                    <td className="p-5 text-right">
-                                        <div className="font-bold text-slate-800 text-base">฿{product.price.toLocaleString()}</div>
-                                        {product.originalPrice && (
-                                            <div className="text-xs text-slate-400 line-through">฿{product.originalPrice.toLocaleString()}</div>
-                                        )}
+                                    <td className="px-10 py-6 text-right">
+                                        <div className="font-black text-slate-900 text-xl tracking-tighter">฿{p.price.toLocaleString()}</div>
                                     </td>
-                                    <td className="p-5 text-center">
-                                        <span className={`inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-bold border ${
-                                            product.stock < 10 
-                                            ? 'bg-red-50 text-red-600 border-red-200' 
-                                            : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                                        }`}>
-                                            {product.stock} units
-                                        </span>
-                                    </td>
-                                    <td className="p-5 text-center">
-                                        <div className="flex justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                            <button onClick={() => handleEdit(product)} className="text-blue-600 hover:bg-blue-100 p-2 rounded-lg transition-colors" title="Edit">
-                                            <Edit size={18} />
-                                            </button>
-                                            <button onClick={() => handleDelete(product.id)} className="text-red-500 hover:bg-red-100 p-2 rounded-lg transition-colors" title="Delete">
-                                            <Trash2 size={18} />
-                                            </button>
+                                    <td className="px-10 py-6">
+                                        <div className="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-all duration-300">
+                                            <button onClick={() => handleEdit(p)} className="p-4 bg-blue-50 text-blue-600 rounded-[1.5rem] hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Edit size={18} /></button>
+                                            <button onClick={() => setDeleteConfirmId(p.id)} className="p-4 bg-red-50 text-red-600 rounded-[1.5rem] hover:bg-red-600 hover:text-white transition-all shadow-sm"><Trash2 size={18} /></button>
                                         </div>
                                     </td>
                                 </tr>
-                                ))
-                            ) : (
-                                <tr>
-                                    <td colSpan={6} className="p-12 text-center text-slate-400">
-                                        <div className="flex flex-col items-center justify-center gap-3">
-                                            <Package size={48} className="text-slate-200" />
-                                            <p>No products found.</p>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
+                            ))}
                         </tbody>
-                        </table>
-                    </div>
-
-                    {/* Pagination Controls */}
-                    {processedProducts.length > 0 && (
-                    <div className="flex items-center justify-between mt-6">
-                        <p className="text-sm text-slate-500">
-                            Showing <span className="font-bold text-slate-700">{startIndex + 1}</span> to <span className="font-bold text-slate-700">{Math.min(startIndex + ITEMS_PER_PAGE, processedProducts.length)}</span> of <span className="font-bold text-slate-700">{processedProducts.length}</span> entries
-                        </p>
-                        <div className="flex items-center gap-2">
-                            <button
-                                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                                disabled={currentPage === 1}
-                                className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
-                            >
-                                <ChevronLeft size={18} />
-                            </button>
-                            <div className="flex gap-1">
-                                {Array.from({ length: totalPages }).map((_, i) => (
-                                    <button
-                                        key={i}
-                                        onClick={() => setCurrentPage(i + 1)}
-                                        className={`w-9 h-9 flex items-center justify-center rounded-lg text-sm font-bold transition-all shadow-sm ${
-                                            currentPage === i + 1 
-                                            ? 'bg-blue-600 text-white shadow-blue-500/30' 
-                                            : 'bg-white border border-slate-200 text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200'
-                                        }`}
-                                    >
-                                        {i + 1}
-                                    </button>
-                                ))}
-                            </div>
-                            <button
-                                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                                disabled={currentPage === totalPages}
-                                className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm"
-                            >
-                                <ChevronRight size={18} />
-                            </button>
-                        </div>
-                    </div>
-                    )}
-                </div>
-            </>
-        ) : (
-            // Database View (Dark Premium Theme)
-            <div className="flex flex-col h-full bg-slate-900 text-slate-300 font-mono overflow-hidden">
-                <header className="bg-slate-950 px-8 py-5 flex justify-between items-center border-b border-slate-800 shadow-lg shrink-0">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-emerald-500/10 p-2 rounded text-emerald-500 border border-emerald-500/20">
-                            <Terminal size={20} />
-                        </div>
-                        <div>
-                            <h1 className="text-lg font-bold text-slate-100 tracking-tight">SQL Console</h1>
-                            <div className="text-xs text-slate-500 flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                                Connected to mock_db_v1
-                            </div>
-                        </div>
-                    </div>
-                    <button 
-                        onClick={handleExportSQL}
-                        className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border border-blue-500/30 px-4 py-2 rounded-lg flex items-center gap-2 transition-all text-sm font-sans hover:border-blue-400/50"
-                    >
-                        <FileDown size={16} /> Export SQL Dump
-                    </button>
-                </header>
-                
-                <div className="p-8 space-y-6 overflow-y-auto flex-1">
-                    {/* Query Input */}
-                    <div className="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden shadow-2xl">
-                        <div className="bg-[#0f1520] px-4 py-2.5 text-xs text-slate-500 border-b border-slate-800 flex justify-between items-center select-none">
-                            <span className="font-bold text-slate-400 uppercase tracking-wider">Query Editor</span>
-                            <div className="flex gap-4">
-                                <span>Supports: <span className="text-purple-400">SELECT</span>, <span className="text-blue-400">WHERE</span>, <span className="text-orange-400">ORDER BY</span></span>
-                            </div>
-                        </div>
-                        <div className="p-0 relative">
-                            <textarea 
-                                value={sqlQuery}
-                                onChange={e => setSqlQuery(e.target.value)}
-                                className="w-full h-40 bg-slate-950 text-blue-100 p-5 focus:outline-none font-mono text-sm resize-none leading-relaxed selection:bg-blue-500/30"
-                                spellCheck="false"
-                            />
-                            <div className="absolute bottom-4 right-4">
-                                <button 
-                                    onClick={handleRunQuery}
-                                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-6 py-2 rounded-lg flex items-center gap-2 transition-all font-sans font-bold shadow-lg shadow-emerald-600/20"
-                                >
-                                    <Play size={16} fill="currentColor" /> Run
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Results / Error */}
-                    {queryError && (
-                        <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
-                            <div className="p-1 bg-red-500/20 rounded-full"><X size={16} /></div>
-                            <span className="font-medium">Error: {queryError}</span>
-                        </div>
-                    )}
-
-                    {queryResult && (
-                        <div className="bg-slate-950 rounded-xl border border-slate-800 overflow-hidden shadow-2xl animate-in fade-in slide-in-from-top-5">
-                            <div className="bg-[#0f1520] px-4 py-2 text-xs text-slate-400 border-b border-slate-800 flex justify-between">
-                                <span className="uppercase tracking-wider font-bold">Query Results</span>
-                                <span className="bg-slate-800 px-2 rounded text-slate-300">{queryResult.length} rows found</span>
-                            </div>
-                            <div className="overflow-x-auto">
-                                <table className="w-full text-left border-collapse">
-                                    <thead className="bg-slate-900 text-slate-400 text-xs">
-                                        <tr>
-                                            {queryResult.length > 0 && Object.keys(queryResult[0]).map(key => (
-                                                <th key={key} className="p-3 border-b border-slate-800 font-semibold uppercase tracking-wider text-blue-400/80">{key}</th>
-                                            ))}
-                                        </tr>
-                                    </thead>
-                                    <tbody className="text-sm">
-                                        {queryResult.map((row, idx) => (
-                                            <tr key={idx} className="hover:bg-white/5 transition border-b border-slate-800/50">
-                                                {Object.values(row).map((val: any, i) => (
-                                                    <td key={i} className="p-3 text-slate-300">
-                                                        {typeof val === 'boolean' ? (
-                                                            <span className={val ? 'text-emerald-400' : 'text-red-400'}>{val ? 'TRUE' : 'FALSE'}</span>
-                                                        ) : val}
-                                                    </td>
-                                                ))}
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-                    )}
-                    
-                    {/* Schema Info */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6 pb-6">
-                         <div className="bg-slate-950/50 p-5 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors">
-                            <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
-                                <Database size={16} className="text-blue-500" /> 
-                                Schema: products
-                            </h3>
-                            <div className="grid grid-cols-2 gap-x-8 gap-y-2">
-                                {['id (INT PK)', 'name (VARCHAR)', 'price (DECIMAL)', 'category (VARCHAR)', 'stock (INT)', 'isFlashSale (BOOL)'].map((col, i) => {
-                                    const [name, type] = col.split(' (');
-                                    return (
-                                        <div key={i} className="text-xs flex justify-between border-b border-slate-800/50 pb-1">
-                                            <span className="text-slate-400 font-mono">{name}</span>
-                                            <span className="text-blue-500/80 font-mono text-[10px]">{type.replace(')', '')}</span>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                         </div>
-                         <div className="bg-slate-950/50 p-5 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors">
-                             <h3 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2">
-                                <Tag size={16} className="text-orange-500" />
-                                Quick Queries
-                             </h3>
-                             <ul className="text-xs space-y-2.5 text-slate-500 font-mono">
-                                 {[
-                                     "SELECT * FROM products",
-                                     "SELECT name, price FROM products WHERE price > 10000",
-                                     "SELECT * FROM products WHERE category = 'เครื่องใช้ไฟฟ้า'",
-                                     "SELECT * FROM products ORDER BY price DESC"
-                                 ].map((q, i) => (
-                                    <li 
-                                        key={i} 
-                                        className="group cursor-pointer hover:text-emerald-400 transition-colors flex items-center gap-2"
-                                        onClick={() => setSqlQuery(q)}
-                                    >
-                                        <span className="opacity-0 group-hover:opacity-100 transition-opacity text-emerald-500">▶</span>
-                                        <span className="border-b border-transparent group-hover:border-emerald-500/30 pb-0.5">{q}</span>
-                                    </li>
-                                 ))}
-                             </ul>
-                         </div>
-                    </div>
+                    </table>
                 </div>
             </div>
+          </div>
         )}
-      </main>
 
-      {/* Edit/Add Modal - Updated UI */}
-      {isModalOpen && activeTab === 'products' && (
-        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center z-50 backdrop-blur-sm transition-all p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-auto overflow-hidden animate-in fade-in zoom-in duration-200 ring-1 ring-slate-900/5 max-h-[90vh] overflow-y-auto">
-             <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-5 border-b border-blue-500/20 flex justify-between items-center sticky top-0 z-10">
-                <div className="flex items-center gap-2 text-white">
-                    {editingProduct ? <Edit size={20} /> : <Plus size={20} />}
-                    <h3 className="font-bold text-lg tracking-tight">{editingProduct ? 'Edit Product' : 'Add New Product'}</h3>
+        {activeTab === 'categories' && (
+          <div className="p-10 space-y-10 animate-in fade-in">
+             <header className="flex justify-between items-center bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
+                <div>
+                  <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-3">Taxonomy Hub</h1>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.5em] flex items-center gap-2">
+                    <List size={14} /> Global Taxonomy Structure
+                  </p>
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="text-white/70 hover:text-white hover:bg-white/10 p-1.5 rounded-full transition-colors">
-                  <X size={20} />
-                </button>
+                <div className="flex items-center gap-4">
+                    {selectedCategoryIds.length > 0 && (
+                      <div className="flex items-center gap-2 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-4">{selectedCategoryIds.length} Selected</span>
+                        <div className="flex gap-1">
+                          <button onClick={() => handleBulkCategoryAction('enable')} className="p-2.5 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all" title="Enable Selection"><Eye size={20} /></button>
+                          <button onClick={() => handleBulkCategoryAction('disable')} className="p-2.5 text-amber-600 hover:bg-amber-50 rounded-xl transition-all" title="Disable Selection"><EyeOff size={20} /></button>
+                          <button onClick={() => handleBulkCategoryAction('delete')} className="p-2.5 text-red-600 hover:bg-red-50 rounded-xl transition-all" title="Delete Selection"><Trash size={20} /></button>
+                        </div>
+                      </div>
+                    )}
+                    <button onClick={() => setIsCategoryModalOpen(true)} className="bg-blue-600 text-white px-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest flex items-center gap-3 shadow-2xl hover:shadow-blue-600/50 transition-all">
+                      <Plus size={22} /> Create New Cluster
+                    </button>
+                </div>
+             </header>
+
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+                {categories.map(cat => (
+                  <div key={cat.id} className={`bg-white p-8 rounded-[3.5rem] border shadow-soft flex flex-col items-center gap-6 group hover:border-blue-300 transition-all ${selectedCategoryIds.includes(cat.id) ? 'border-blue-500 ring-8 ring-blue-500/5 bg-blue-50/5' : 'border-slate-100'}`}>
+                    <div className="flex justify-between w-full">
+                       <button onClick={() => toggleSelectOneCategory(cat.id)} className="text-blue-600">
+                          {selectedCategoryIds.includes(cat.id) ? <CheckSquare size={28} /> : <Square size={28} className="text-slate-100 group-hover:text-slate-200" />}
+                       </button>
+                       <div className={`w-3.5 h-3.5 rounded-full ${cat.isActive !== false ? 'bg-emerald-500' : 'bg-slate-200'}`}></div>
+                    </div>
+                    <div className={`w-32 h-32 rounded-[2.5rem] overflow-hidden border-8 border-slate-50 shadow-inner group-hover:scale-105 transition-all ${cat.isActive === false ? 'grayscale opacity-50' : ''}`}>
+                      <img src={cat.icon} className="w-full h-full object-cover" alt={cat.name} />
+                    </div>
+                    <div className="text-center">
+                      <div className="font-black text-slate-900 text-xl uppercase tracking-tighter leading-tight mb-2">{cat.name}</div>
+                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{products.filter(p => p.category === cat.name).length} Nodes Assigned</div>
+                    </div>
+                    <div className="flex gap-3 w-full pt-6 border-t border-slate-50">
+                      <button onClick={() => { setEditingCategory(cat); setCategoryFormData(cat); setIsCategoryModalOpen(true); }} className="flex-1 flex items-center justify-center gap-2 py-4 bg-slate-50 text-slate-900 rounded-[1.5rem] hover:bg-blue-600 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest">
+                        <Edit size={16} /> Edit
+                      </button>
+                      <button onClick={() => db.deleteCategory(cat.id)} className="p-4 bg-red-50 text-red-600 rounded-[1.5rem] hover:bg-red-600 hover:text-white transition-all shadow-sm"><Trash2 size={16} /></button>
+                    </div>
+                  </div>
+                ))}
              </div>
-             <form onSubmit={handleSubmit} className="p-8 space-y-5">
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1.5">Product Name</label>
-                  <input 
-                    type="text" 
-                    value={formData.name} 
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    className="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all text-slate-800"
-                    placeholder="Enter product name"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-5">
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Price (THB)</label>
-                    <input 
-                      type="number" 
-                      value={formData.price} 
-                      onChange={e => setFormData({...formData, price: Number(e.target.value)})}
-                      className="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all text-slate-800"
-                      required
-                    />
-                  </div>
-                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Original Price <span className="font-normal text-slate-400">(Optional)</span></label>
-                    <input 
-                      type="number" 
-                      value={formData.originalPrice || ''} 
-                      onChange={e => setFormData({...formData, originalPrice: e.target.value ? Number(e.target.value) : undefined})}
-                      className="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all text-slate-800"
-                      placeholder="e.g. 15900"
-                    />
-                  </div>
-                </div>
+          </div>
+        )}
 
-                <div className="grid grid-cols-2 gap-5">
-                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Stock Quantity</label>
-                    <input 
-                      type="number" 
-                      value={formData.stock} 
-                      onChange={e => setFormData({...formData, stock: Number(e.target.value)})}
-                      className="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all text-slate-800"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1.5">Discount (%)</label>
-                    <input 
-                      type="number" 
-                      value={formData.discount || 0} 
-                      onChange={e => setFormData({...formData, discount: Number(e.target.value)})}
-                      className="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all text-slate-800"
-                    />
-                  </div>
-                </div>
-
+        {activeTab === 'database' && (
+          <div className="p-10 space-y-10 animate-in fade-in">
+             <header className="flex justify-between items-center bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
                 <div>
-                   <label className="block text-sm font-bold text-slate-700 mb-1.5">Category</label>
-                   <div className="relative">
-                        <select 
-                            value={formData.category} 
-                            onChange={e => setFormData({...formData, category: e.target.value})}
-                            className="w-full border border-slate-300 rounded-xl px-4 py-2.5 bg-white focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all text-slate-800 appearance-none"
-                        >
-                            {CATEGORIES.map(cat => (
-                                <option key={cat.id} value={cat.name}>{cat.name}</option>
-                            ))}
-                            <option value="อื่นๆ">Other</option>
-                        </select>
-                        <ArrowDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+                  <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-3">SQL Terminal</h1>
+                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.5em] flex items-center gap-2">
+                    <Terminal size={14} /> Advanced Query Engine
+                  </p>
+                </div>
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2 px-6 py-4 bg-emerald-50 text-emerald-600 rounded-2xl border border-emerald-100 font-black text-[10px] uppercase tracking-widest">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> DB Status: Connected
+                    </div>
+                </div>
+             </header>
+
+             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
+                {/* SQL Input Area */}
+                <div className="lg:col-span-7 flex flex-col gap-6">
+                   <div className="bg-[#1e293b] rounded-[3rem] shadow-2xl p-8 flex flex-col border border-slate-700/50">
+                      <div className="flex items-center justify-between mb-6 border-b border-slate-700/50 pb-6 px-4">
+                         <div className="flex items-center gap-3">
+                            <div className="flex gap-1.5">
+                               <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
+                               <div className="w-3 h-3 rounded-full bg-amber-500/80"></div>
+                               <div className="w-3 h-3 rounded-full bg-emerald-500/80"></div>
+                            </div>
+                            <span className="text-slate-400 font-mono text-xs ml-4">Registry_Sequence_Compiler.sh</span>
+                         </div>
+                         <div className="flex items-center gap-4">
+                            <button onClick={() => setSqlCommand("")} className="text-slate-500 hover:text-white transition-colors" title="Clear Console"><RotateCcw size={16} /></button>
+                            <button onClick={executeSql} disabled={isExecutingSql} className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white px-8 py-3 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-3 shadow-xl transition-all active:scale-95">
+                               {isExecutingSql ? <RotateCcw size={16} className="animate-spin" /> : <Play size={16} />} Execute Sequence
+                            </button>
+                         </div>
+                      </div>
+                      
+                      <div className="flex-1 bg-black/30 rounded-2xl p-6 mb-6">
+                        <textarea 
+                          value={sqlCommand} 
+                          onChange={(e) => setSqlCommand(e.target.value)}
+                          className="w-full bg-transparent text-emerald-400 font-mono text-sm resize-none outline-none h-48 leading-relaxed" 
+                          spellCheck="false"
+                        />
+                      </div>
+
+                      <div className="bg-black/50 rounded-2xl p-6 h-64 overflow-y-auto font-mono text-[11px] no-scrollbar">
+                         {sqlLog.map((log, i) => (
+                           <div key={i} className={`mb-2 ${log.startsWith('>') ? 'text-blue-400' : log.startsWith('Error') ? 'text-red-400' : 'text-slate-400'}`}>
+                              {log}
+                           </div>
+                         ))}
+                         <div ref={terminalEndRef} />
+                      </div>
                    </div>
                 </div>
-                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1.5">Image URL</label>
-                  <input 
-                    type="text" 
-                    value={formData.image} 
-                    onChange={e => setFormData({...formData, image: e.target.value})}
-                    className="w-full border border-slate-300 rounded-xl px-4 py-2.5 focus:ring-4 focus:ring-blue-100 focus:border-blue-500 outline-none transition-all text-xs text-slate-600"
-                    placeholder="https://..."
-                  />
-                </div>
 
-                <div className="pt-2">
-                   <label className="flex items-center gap-3 cursor-pointer bg-slate-50 px-5 py-4 rounded-xl border border-slate-200 hover:border-blue-300 hover:bg-blue-50/50 transition-all">
-                        <div className="relative flex items-center">
-                            <input 
-                                type="checkbox"
-                                checked={formData.isFlashSale || false}
-                                onChange={e => setFormData({...formData, isFlashSale: e.target.checked})}
-                                className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border border-slate-300 shadow-sm transition-all checked:border-blue-600 checked:bg-blue-600 hover:border-blue-400"
-                            />
-                            <svg className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 peer-checked:opacity-100" width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M10 3L4.5 8.5L2 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                            </svg>
+                {/* SQL Result Visualization */}
+                <div className="lg:col-span-5 space-y-8">
+                   <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-slate-200">
+                      <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-[0.5em] mb-8 flex items-center gap-3">
+                         <Layers size={20} /> Matrix Projection
+                      </h4>
+                      {sqlResult.length > 0 ? (
+                        <div className="space-y-6">
+                           {sqlResult.map(res => (
+                             <div key={res.id} className="flex items-center gap-6 p-4 hover:bg-slate-50 rounded-2xl border border-slate-100 transition-all group">
+                                <div className="w-12 h-12 rounded-xl bg-slate-50 p-1 border border-slate-100 shrink-0">
+                                   <img src={res.image} className="w-full h-full object-contain mix-blend-multiply" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                   <div className="font-black text-slate-900 text-xs truncate uppercase tracking-tight">{res.name}</div>
+                                   <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-1">Stock: {res.stock} Unit Node</div>
+                                </div>
+                             </div>
+                           ))}
                         </div>
-                        <div className="flex flex-col">
-                            <span className="text-sm font-bold text-slate-800 flex items-center gap-2">
-                                <Zap size={16} className={formData.isFlashSale ? "text-orange-500 fill-orange-500" : "text-slate-400"} /> 
-                                Set as Flash Sale Item
-                            </span>
-                            <span className="text-xs text-slate-500 mt-0.5">This item will appear in the homepage Flash Sale section</span>
+                      ) : (
+                        <div className="h-64 flex flex-col items-center justify-center text-slate-300">
+                           <Code size={48} className="mb-4 opacity-20" />
+                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No active matrix projection</p>
                         </div>
-                    </label>
+                      )}
+                   </div>
+
+                   <div className="bg-[#001f3f] rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
+                      <h4 className="text-[11px] font-black text-blue-400 uppercase tracking-[0.5em] mb-6 relative z-10">Data Integrity System</h4>
+                      <p className="text-blue-100/60 text-xs leading-relaxed mb-8 relative z-10 font-medium">ทุกการเปลี่ยนแปลงจะถูกบันทึกเข้าสู่ Global Core Registry โดยอัตโนมัติ กรุณาตรวจสอบ Query ก่อนทำการ Execute</p>
+                      <button className="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-[2rem] py-5 text-[10px] font-black uppercase tracking-[0.4em] transition-all relative z-10 active:scale-95 flex items-center justify-center gap-3">
+                        <RotateCcw size={16} /> Re-Sync Matrix
+                      </button>
+                   </div>
                 </div>
-                
-                <div className="pt-6 flex justify-end gap-3 border-t border-slate-100">
-                   <button type="button" onClick={() => setIsModalOpen(false)} className="px-6 py-2.5 text-slate-600 hover:bg-slate-100 rounded-xl font-medium transition-colors">Cancel</button>
-                   <button type="submit" className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:shadow-lg hover:shadow-blue-500/30 flex items-center gap-2 font-bold transition-all transform active:scale-95">
-                     <Save size={18} /> Save Product
+             </div>
+          </div>
+        )}
+
+        {/* Global Confirmation Modal */}
+        {(deleteConfirmId || bulkDeleteConfirm) && (
+          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
+             <div className="bg-white p-16 rounded-[5rem] text-center max-w-md border border-white/20 shadow-2xl animate-in zoom-in duration-500">
+                <div className="w-24 h-24 bg-red-50 text-red-500 rounded-[2.5rem] flex items-center justify-center mx-auto mb-10 shadow-inner">
+                  <ShieldAlert size={56} strokeWidth={1.5} />
+                </div>
+                <h3 className="text-4xl font-black mb-4 tracking-tighter uppercase leading-none text-slate-900">Purge Request</h3>
+                <p className="text-slate-500 text-sm mb-12 font-bold leading-relaxed uppercase tracking-widest">
+                  {bulkDeleteConfirm 
+                    ? `Permanent removal of ${bulkDeleteConfirm === 'products' ? selectedProductIds.length : selectedCategoryIds.length} registry clusters in progress.` 
+                    : 'A single SKU record is about to be terminated from the global matrix.'
+                  }
+                </p>
+                <div className="flex gap-4">
+                   <button 
+                    onClick={() => { setDeleteConfirmId(null); setBulkDeleteConfirm(null); }} 
+                    className="flex-1 px-10 py-6 bg-slate-100 rounded-[2.5rem] font-black text-[11px] uppercase tracking-[0.4em] text-slate-600 hover:bg-slate-200 transition-all"
+                   >
+                    Abort
+                   </button>
+                   <button 
+                    onClick={bulkDeleteConfirm ? handleBulkDelete : confirmDelete} 
+                    className="flex-1 px-10 py-6 bg-red-600 text-white rounded-[2.5rem] font-black text-[11px] uppercase tracking-[0.4em] shadow-2xl shadow-red-500/40 active:scale-95 hover:bg-red-700 transition-all"
+                   >
+                    Terminate
                    </button>
                 </div>
-             </form>
+             </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {/* Modular Product Registry Modal */}
+        {isModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xl flex items-center justify-center z-[60] p-10 overflow-y-auto no-scrollbar">
+             <div className="bg-white rounded-[5rem] shadow-2xl w-full max-w-7xl mx-auto overflow-hidden animate-in zoom-in duration-500 flex flex-col max-h-[90vh] border border-white/20">
+                <header className="bg-[#001f3f] p-12 text-white flex justify-between items-center relative overflow-hidden shrink-0">
+                   <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-transparent"></div>
+                   <div className="flex items-center gap-8 relative z-10">
+                     <div className="p-5 bg-white/10 rounded-[2.5rem] backdrop-blur-md border border-white/10 shadow-2xl"><Package size={42} /></div>
+                     <div>
+                      <h2 className="text-4xl font-black tracking-tighter uppercase leading-none">{editingProduct ? 'Modify Registry' : 'Initialize Matrix'}</h2>
+                      <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.5em] mt-4 opacity-70">Core Logic Version 4.0.2</p>
+                     </div>
+                   </div>
+                   <button onClick={() => setIsModalOpen(false)} className="hover:bg-white/10 p-5 rounded-full transition-all relative z-10 border border-white/10 group"><X size={42} className="group-hover:rotate-90 transition-transform" /></button>
+                </header>
+
+                <form onSubmit={handleSubmit} className="p-16 overflow-y-auto no-scrollbar bg-slate-50 flex-1">
+                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-16">
+                      <div className="space-y-12">
+                         <section>
+                            <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-[0.5em] mb-8 flex items-center gap-3">
+                               <Info size={16} /> Data Fundamentals
+                            </h4>
+                            <div className="space-y-8">
+                               <div>
+                                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Global Descriptor</label>
+                                  <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-8 py-5 text-sm font-black text-slate-900 outline-none focus:ring-8 focus:ring-blue-500/5 transition-all shadow-sm" required />
+                               </div>
+                               <div className="grid grid-cols-2 gap-6">
+                                  <div>
+                                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Brand OEM</label>
+                                     <input type="text" value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-6 py-5 text-sm font-bold outline-none" />
+                                  </div>
+                                  <div>
+                                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Registry SKU</label>
+                                     <input type="text" value={formData.sku} onChange={e => setFormData({...formData, sku: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-6 py-5 text-xs font-mono font-black outline-none" required />
+                                  </div>
+                               </div>
+                               <div className="grid grid-cols-2 gap-6">
+                                  <div>
+                                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Cluster Node</label>
+                                     <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-6 py-5 text-xs font-black uppercase tracking-widest outline-none shadow-sm">
+                                       {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                     </select>
+                                  </div>
+                                  <div>
+                                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Base Price (฿)</label>
+                                     <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-6 py-5 text-sm font-black text-blue-600 outline-none" required />
+                                  </div>
+                               </div>
+                               <div>
+                                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Visual Asset Source (URL)</label>
+                                  <input type="text" value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-8 py-5 text-[10px] font-mono outline-none" />
+                               </div>
+                            </div>
+                         </section>
+
+                         <section>
+                            <h4 className="text-[11px] font-black text-amber-600 uppercase tracking-[0.5em] mb-8 flex items-center gap-3">
+                               <Truck size={16} /> Physical Logistics
+                            </h4>
+                            <div className="bg-amber-50/50 p-10 rounded-[3rem] border border-amber-100/50 space-y-8">
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-[9px] font-black text-amber-700/50 uppercase mb-3 tracking-widest">Weight (kg)</label>
+                                        <input type="number" value={formData.weight} onChange={e => setFormData({...formData, weight: Number(e.target.value)})} className="w-full bg-white border border-amber-100 rounded-[1.5rem] px-6 py-4 text-xs font-black outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[9px] font-black text-amber-700/50 uppercase mb-3 tracking-widest">Volume Specs</label>
+                                        <input type="text" placeholder="W x H x D" value={formData.dimensions} onChange={e => setFormData({...formData, dimensions: e.target.value})} className="w-full bg-white border border-amber-100 rounded-[1.5rem] px-6 py-4 text-xs font-black outline-none" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="flex items-center justify-between bg-white px-6 py-4 rounded-[1.5rem] border border-amber-100">
+                                        <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Prominent Placement</span>
+                                        <button type="button" onClick={() => setFormData({...formData, isFeatured: !formData.isFeatured})} className={`w-14 h-8 rounded-full transition-all relative ${formData.isFeatured ? 'bg-amber-500 shadow-lg shadow-amber-500/20' : 'bg-slate-200'}`}>
+                                            <div className={`absolute top-1.5 w-5 h-5 bg-white rounded-full transition-all shadow-md ${formData.isFeatured ? 'left-8' : 'left-1.5'}`} />
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                         </section>
+                      </div>
+
+                      <div className="lg:col-span-2 space-y-12">
+                         <section className="bg-white rounded-[4rem] p-12 border border-slate-200 shadow-sm flex flex-col min-h-[500px]">
+                            <div className="flex justify-between items-center mb-10">
+                                <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-[0.5em] flex items-center gap-3">
+                                   <Layers size={20} /> Matrix Variant Controller
+                                </h4>
+                                <button type="button" onClick={() => { const newV: ProductVariant = { id: `v-${Date.now()}`, name: '', sku: `${formData.sku || 'SKU'}-${(formData.variants?.length || 0) + 1}`, price: formData.price || 0, stock: 0 }; setFormData(prev => ({ ...prev, variants: [...(prev.variants || []), newV] })); }} className="bg-blue-600 text-white px-8 py-4 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-3 shadow-xl hover:scale-105 transition-all">
+                                   <Plus size={16} strokeWidth={3} /> Initialize Variant
+                                </button>
+                            </div>
+                            
+                            <div className="flex-1 space-y-6">
+                               {formData.variants && formData.variants.length > 0 ? (
+                                  formData.variants.map((v) => (
+                                    <div key={v.id} className="bg-slate-50/50 rounded-[2.5rem] p-8 border border-slate-100 relative group animate-in slide-in-from-bottom-4">
+                                        <button type="button" onClick={() => setFormData(prev => ({ ...prev, variants: prev.variants?.filter(x => x.id !== v.id) }))} className="absolute -top-3 -right-3 bg-red-500 text-white rounded-2xl p-3 opacity-0 group-hover:opacity-100 transition-all shadow-xl hover:scale-110"><Trash2 size={20} /></button>
+                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+                                            <div>
+                                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 tracking-widest">Descriptor</label>
+                                              <input type="text" value={v.name} placeholder="Finish..." onChange={e => updateVariant(v.id, 'name', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-5 py-4 text-xs font-black outline-none" />
+                                            </div>
+                                            <div>
+                                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 tracking-widest">SKU Instance</label>
+                                              <input type="text" value={v.sku} onChange={e => updateVariant(v.id, 'sku', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-5 py-4 text-xs font-mono font-black outline-none" />
+                                            </div>
+                                            <div>
+                                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 tracking-widest">MSRP (฿)</label>
+                                              <input type="number" value={v.price} onChange={e => updateVariant(v.id, 'price', Number(e.target.value))} className="w-full bg-white border border-slate-200 rounded-xl px-5 py-4 text-xs font-black text-blue-600 outline-none" />
+                                            </div>
+                                            <div>
+                                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 tracking-widest">Stock</label>
+                                              <input type="number" value={v.stock} onChange={e => updateVariant(v.id, 'stock', Number(e.target.value))} className="w-full bg-white border border-slate-200 rounded-xl px-5 py-4 text-xs font-black outline-none" />
+                                            </div>
+                                        </div>
+                                    </div>
+                                  ))
+                               ) : (
+                                  <div className="h-full flex flex-col items-center justify-center py-20 bg-slate-50/50 rounded-[3rem] border border-dashed border-slate-200">
+                                      <Layers size={64} className="text-slate-200 mb-6" />
+                                      <p className="font-black text-[10px] uppercase tracking-[0.4em] text-slate-300">Standalone Matrix Instance</p>
+                                  </div>
+                                )}
+                            </div>
+                         </section>
+
+                         <section>
+                            <div className="flex justify-between items-end mb-8">
+                                <h4 className="text-[11px] font-black text-emerald-600 uppercase tracking-[0.5em] flex items-center gap-3">
+                                   <Globe size={20} /> SEO Engine
+                                </h4>
+                                <button type="button" onClick={generateSEO} className="bg-emerald-600 text-white px-8 py-3.5 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 shadow-lg hover:scale-105 transition-all">
+                                   <Wand2 size={16} /> Re-Calculate Metadata
+                                </button>
+                            </div>
+                            <div className="bg-emerald-50/50 p-12 rounded-[4rem] border border-emerald-100/50 grid grid-cols-1 md:grid-cols-2 gap-12">
+                                <div className="space-y-8">
+                                    <div>
+                                        <label className="block text-[9px] font-black text-emerald-600 uppercase mb-3 tracking-widest">Optimized URL ID</label>
+                                        <input type="text" value={formData.seoUrl} onChange={e => setFormData({...formData, seoUrl: e.target.value})} className="w-full bg-white border border-emerald-100 rounded-[1.5rem] px-6 py-4 text-xs font-mono outline-none" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[9px] font-black text-emerald-600 uppercase mb-3 tracking-widest">Search Keywords</label>
+                                        <div className="flex flex-wrap gap-2 pt-2">
+                                            {formData.seoKeywords?.map(k => (
+                                                <span key={k} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest">{k}</span>
+                                            ))}
+                                            <input type="text" placeholder="+ Keyword" value={seoKeywordInput} onChange={e => setSeoKeywordInput(e.target.value)} onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); if(seoKeywordInput.trim()) setFormData(prev => ({...prev, seoKeywords: [...(prev.seoKeywords || []), seoKeywordInput.trim()]})); setSeoKeywordInput(''); } }} className="bg-transparent border-none text-[9px] font-black outline-none placeholder:text-emerald-300/50 min-w-[80px]" />
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="block text-[9px] font-black text-emerald-600 uppercase mb-3 tracking-widest">Description Snapshot</label>
+                                    <textarea value={formData.seoDescription} onChange={e => setFormData({...formData, seoDescription: e.target.value})} maxLength={160} className="w-full bg-white border border-emerald-100 rounded-[2rem] p-6 text-[10px] leading-relaxed font-bold text-slate-600 h-32 resize-none outline-none shadow-inner" placeholder="Metadata snippet..." />
+                                </div>
+                            </div>
+                         </section>
+                      </div>
+                   </div>
+
+                   <div className="mt-20 pt-12 border-t border-slate-200 flex justify-end items-center gap-10">
+                      <button type="button" onClick={() => setIsModalOpen(false)} className="font-black text-[11px] uppercase tracking-[0.5em] text-slate-400 hover:text-slate-900 transition-colors">Discard Sequence</button>
+                      <button type="submit" className="bg-[#001f3f] text-white px-20 py-8 rounded-[3rem] font-black text-[12px] uppercase tracking-[0.5em] shadow-2xl shadow-blue-900/40 hover:-translate-y-2 transition-all flex items-center gap-4 border border-white/10 active:scale-95">
+                         <Save size={24} strokeWidth={3} /> Commit to Registry Matrix
+                      </button>
+                   </div>
+                </form>
+             </div>
+          </div>
+        )}
+
+        {/* Category Creation Modal */}
+        {isCategoryModalOpen && (
+          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xl flex items-center justify-center z-[60] p-10 overflow-y-auto no-scrollbar">
+             <div className="bg-white rounded-[5rem] shadow-2xl w-full max-w-2xl mx-auto overflow-hidden animate-in zoom-in duration-500 flex flex-col border border-white/20">
+                <header className="bg-[#001f3f] p-10 text-white flex justify-between items-center relative overflow-hidden shrink-0">
+                   <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-transparent"></div>
+                   <div className="flex items-center gap-6 relative z-10">
+                     <div className="p-4 bg-white/10 rounded-[2rem] backdrop-blur-md border border-white/10 shadow-2xl"><List size={32} /></div>
+                     <div>
+                      <h2 className="text-3xl font-black tracking-tighter uppercase leading-none">{editingCategory ? 'Update Cluster' : 'Define New Cluster'}</h2>
+                      <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.5em] mt-3 opacity-70">Taxonomy Hub v2.0</p>
+                     </div>
+                   </div>
+                   <button onClick={() => { setIsCategoryModalOpen(false); setEditingCategory(null); }} className="hover:bg-white/10 p-4 rounded-full transition-all relative z-10 border border-white/10 group"><X size={32} /></button>
+                </header>
+                
+                <div className="p-12 bg-slate-50">
+                   <div className="space-y-8">
+                      <div>
+                          <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Cluster Name</label>
+                          <input type="text" value={categoryFormData.name} onChange={e => setCategoryFormData({...categoryFormData, name: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-8 py-5 text-sm font-black text-slate-900 outline-none focus:ring-8 focus:ring-blue-500/5 transition-all shadow-sm" placeholder="e.g. Premium Filtration" />
+                      </div>
+                      <div>
+                          <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Iconography Asset (URL)</label>
+                          <input type="text" value={categoryFormData.icon} onChange={e => setCategoryFormData({...categoryFormData, icon: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-8 py-5 text-[10px] font-mono outline-none shadow-sm" placeholder="https://images.unsplash.com/..." />
+                      </div>
+                      <div className="flex items-center justify-between bg-white px-8 py-5 rounded-[2rem] border border-slate-200 shadow-sm">
+                          <div className="flex items-center gap-3">
+                             {categoryFormData.isActive ? <CheckCircle2 className="text-emerald-500" size={20} /> : <EyeOff className="text-slate-300" size={20} />}
+                             <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Discovery Status: Active</span>
+                          </div>
+                          <button type="button" onClick={() => setCategoryFormData({...categoryFormData, isActive: !categoryFormData.isActive})} className={`w-14 h-8 rounded-full transition-all relative ${categoryFormData.isActive ? 'bg-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-slate-200'}`}>
+                              <div className={`absolute top-1.5 w-5 h-5 bg-white rounded-full transition-all shadow-md ${categoryFormData.isActive ? 'left-8' : 'left-1.5'}`} />
+                          </button>
+                      </div>
+                   </div>
+                   
+                   <div className="mt-12 pt-8 border-t border-slate-200 flex justify-end items-center gap-8">
+                      <button type="button" onClick={() => { setIsCategoryModalOpen(false); setEditingCategory(null); }} className="font-black text-[10px] uppercase tracking-[0.4em] text-slate-400 hover:text-slate-900 transition-colors">Abort</button>
+                      <button 
+                        onClick={() => {
+                          if (editingCategory) db.updateCategory({ ...editingCategory, ...categoryFormData } as Category);
+                          else db.addCategory(categoryFormData);
+                          setIsCategoryModalOpen(false);
+                          setEditingCategory(null);
+                          setCategoryFormData({ name: '', icon: '', isActive: true });
+                          refreshData();
+                        }}
+                        className="bg-[#001f3f] text-white px-12 py-6 rounded-[2.5rem] font-black text-[10px] uppercase tracking-[0.4em] shadow-2xl shadow-blue-900/40 hover:-translate-y-1 transition-all flex items-center gap-4 border border-white/10"
+                      >
+                         <Save size={18} /> {editingCategory ? 'Commit Cluster' : 'Publish Cluster'}
+                      </button>
+                   </div>
+                </div>
+             </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 };
