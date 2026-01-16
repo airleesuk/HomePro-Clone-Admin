@@ -1,3 +1,4 @@
+
 import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { Hero } from '../components/Hero';
@@ -15,6 +16,16 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
   const displayPrice = selectedVariant ? selectedVariant.price : product.price;
   const displayImage = selectedVariant?.image ? selectedVariant.image : product.image;
 
+  // Function to handle variant selection (with toggle off)
+  const handleVariantClick = (e: React.MouseEvent, variant: ProductVariant) => {
+    e.stopPropagation();
+    if (selectedVariant?.id === variant.id) {
+      setSelectedVariant(null);
+    } else {
+      setSelectedVariant(variant);
+    }
+  };
+
   return (
     <div className={`bg-white rounded-2xl border hover:shadow-2xl transition-all p-4 group cursor-pointer flex flex-col h-full relative ${product.isFeatured ? 'border-yellow-200 ring-2 ring-yellow-50' : 'border-gray-100'}`}>
       {product.isFeatured && (
@@ -25,9 +36,10 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
       
       <div className="relative mb-4 flex-shrink-0 overflow-hidden rounded-xl h-44 bg-gray-50">
         <img 
+          key={displayImage} // Force re-render for transition if needed, though mostly handled by CSS
           src={displayImage} 
           alt={product.name} 
-          className="w-full h-full object-contain group-hover:scale-110 transition duration-700" 
+          className="w-full h-full object-contain group-hover:scale-110 transition duration-700 animate-in fade-in" 
         />
         {/* Quick View Overlay Button */}
         <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px]">
@@ -61,10 +73,7 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
               {product.variants.map((variant) => (
                 <button
                   key={variant.id}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedVariant(variant);
-                  }}
+                  onClick={(e) => handleVariantClick(e, variant)}
                   className={`text-[11px] px-3 py-1.5 rounded-lg border transition-all duration-300 flex items-center gap-1.5 font-bold ${
                     selectedVariant?.id === variant.id 
                       ? 'bg-blue-600 border-blue-600 text-white shadow-md ring-4 ring-blue-100' 
@@ -157,7 +166,7 @@ const ProductQuickViewModal: React.FC<{ product: Product | null; onClose: () => 
                 {product.variants.map((v) => (
                   <button 
                     key={v.id} 
-                    onClick={() => setSelectedVariant(v)}
+                    onClick={() => setSelectedVariant(selectedVariant?.id === v.id ? null : v)}
                     className={`px-4 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${selectedVariant?.id === v.id ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-md ring-4 ring-blue-50' : 'border-gray-100 hover:border-gray-300 text-gray-600'}`}
                   >
                     {v.name}

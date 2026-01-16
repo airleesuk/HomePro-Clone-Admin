@@ -6,7 +6,7 @@ import {
   Package, Settings, Plus, Trash2, Edit, Save, X, Search, 
   ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, 
   Filter, Zap, Layers, CheckSquare, Square, Star, 
-  Image as ImageIcon, AlertCircle, CheckCircle2, MinusSquare, XCircle
+  Image as ImageIcon, AlertCircle, CheckCircle2, MinusSquare, XCircle, LayoutGrid
 } from 'lucide-react';
 
 export const AdminPage: React.FC = () => {
@@ -18,6 +18,17 @@ export const AdminPage: React.FC = () => {
   // UI State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  // Bulk Edit State
+  const [isBulkEditModalOpen, setIsBulkEditModalOpen] = useState(false);
+  const [bulkEditValues, setBulkEditValues] = useState({
+    price: '',
+    stock: '',
+    image: '',
+    applyPrice: false,
+    applyStock: false,
+    applyImage: false
+  });
 
   // Filter & Search State
   const [productSearchQuery, setProductSearchQuery] = useState('');
@@ -130,6 +141,80 @@ export const AdminPage: React.FC = () => {
   const handleBulkDelete = () => {
     if (!confirm(`ยืนยันการลบสินค้า ${selectedIds.length} รายการที่เลือกไว้?`)) return;
     selectedIds.forEach(id => db.deleteProduct(id));
+    setSelectedIds([]);
+    refreshData();
+  };
+
+  const handleBulkEditOpen = () => {
+    setBulkEditValues({
+      price: '',
+      stock: '',
+      image: '',
+      applyPrice: false,
+      applyStock: false,
+      applyImage: false
+    });
+    setIsBulkEditModalOpen(true);
+  };
+
+  const handleBulkSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    selectedIds.forEach(id => {
+      const product = products.find(p => p.id === id);
+      if (!product) return;
+
+      const updatedProduct = { ...product };
+      const hasVariants = updatedProduct.variants && updatedProduct.variants.length > 0;
+
+      // Price Update
+      if (bulkEditValues.applyPrice) {
+        const newPrice = Number(bulkEditValues.price);
+        if (hasVariants) {
+          // Update all variants prices
+          updatedProduct.variants = updatedProduct.variants!.map(v => ({
+            ...v,
+            price: newPrice
+          }));
+          updatedProduct.price = newPrice; // Update main display price
+        } else {
+          updatedProduct.price = newPrice;
+        }
+      }
+
+      // Stock Update
+      if (bulkEditValues.applyStock) {
+        const newStock = Number(bulkEditValues.stock);
+        if (hasVariants) {
+          // Update all variants stock
+          updatedProduct.variants = updatedProduct.variants!.map(v => ({
+            ...v,
+            stock: newStock
+          }));
+          // Recalculate total stock for main product
+          updatedProduct.stock = updatedProduct.variants!.reduce((sum, v) => sum + v.stock, 0);
+        } else {
+          updatedProduct.stock = newStock;
+        }
+      }
+
+      // Image Update
+      if (bulkEditValues.applyImage && bulkEditValues.image) {
+        const newImage = bulkEditValues.image;
+        updatedProduct.image = newImage;
+        if (hasVariants) {
+          // Update all variants image
+           updatedProduct.variants = updatedProduct.variants!.map(v => ({
+            ...v,
+            image: newImage
+          }));
+        }
+      }
+
+      db.updateProduct(updatedProduct);
+    });
+
+    setIsBulkEditModalOpen(false);
     setSelectedIds([]);
     refreshData();
   };
@@ -281,7 +366,7 @@ export const AdminPage: React.FC = () => {
     <div className="flex h-screen bg-gray-100 font-sans">
       <aside className="w-64 bg-[#1a237e] text-white flex flex-col hidden md:flex">
         <div className="p-6 text-2xl font-bold tracking-wider border-b border-blue-800">
-          Admin<span className="text-orange-400">Panel</span>
+          Waree-th<span className="text-orange-400">Admin</span>
         </div>
         <nav className="flex-1 p-4 space-y-2">
           <button onClick={() => setActiveTab('products')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition text-left ${activeTab === 'products' ? 'bg-blue-800 text-white shadow-inner' : 'text-gray-300 hover:bg-blue-800 hover:text-white'}`}>
@@ -298,8 +383,8 @@ export const AdminPage: React.FC = () => {
           <>
             <header className="bg-white shadow-sm px-4 md:px-8 py-4 flex justify-between items-center sticky top-0 z-30">
               <div>
-                <h1 className="text-xl font-bold text-gray-800">จัดการคลังสินค้า</h1>
-                <p className="text-xs text-gray-400">มีสินค้าทั้งหมด {products.length} รายการ</p>
+                <h1 className="text-xl font-bold text-gray-800">Waree-th Database Admin</h1>
+                <p className="text-xs text-gray-400">มีสินค้าทั้งหมด {products.length} รายการ (SQL Connected)</p>
               </div>
               <button 
                 onClick={handleAddNew}
@@ -488,6 +573,13 @@ export const AdminPage: React.FC = () => {
                    
                    <div className="flex items-center gap-4">
                       <button 
+                        onClick={handleBulkEditOpen}
+                        className="flex items-center gap-2 bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-lg active:scale-95"
+                      >
+                        <Edit size={16} /> แก้ไขพร้อมกัน
+                      </button>
+
+                      <button 
                         onClick={handleBulkDelete}
                         className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-lg active:scale-95"
                       >
@@ -507,6 +599,125 @@ export const AdminPage: React.FC = () => {
           </>
         )}
       </main>
+
+      {/* Bulk Edit Modal */}
+      {isBulkEditModalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+             <div className="bg-[#1a237e] px-8 py-5 border-b border-white/10 flex justify-between items-center text-white">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-xl">
+                    <LayoutGrid size={22} />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-lg tracking-wide">แก้ไขข้อมูลหลายรายการ</h3>
+                    <p className="text-[10px] text-blue-200">กำลังแก้ไข {selectedIds.length} รายการที่เลือก</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsBulkEditModalOpen(false)} className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-all duration-200">
+                  <X size={20} />
+                </button>
+             </div>
+             
+             <form onSubmit={handleBulkSave} className="p-8 space-y-6">
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 flex gap-3 items-start">
+                   <AlertCircle className="text-blue-600 shrink-0 mt-0.5" size={18} />
+                   <div className="text-xs text-blue-800 leading-relaxed">
+                     <strong>หมายเหตุ:</strong> การแก้ไขในหน้านี้จะอัปเดตข้อมูลของสินค้าหลัก และหากสินค้ามี <strong>"ตัวเลือกย่อย" (Variants)</strong> ระบบจะทำการอัปเดตข้อมูลของทุกตัวเลือกให้เป็นค่าเดียวกันโดยอัตโนมัติ
+                   </div>
+                </div>
+
+                <div className="space-y-4">
+                   {/* Price Field */}
+                   <div className={`p-4 rounded-xl border-2 transition-all ${bulkEditValues.applyPrice ? 'border-blue-500 bg-blue-50/30' : 'border-gray-100 bg-white'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                         <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer select-none">
+                            <input 
+                              type="checkbox" 
+                              checked={bulkEditValues.applyPrice} 
+                              onChange={(e) => setBulkEditValues({...bulkEditValues, applyPrice: e.target.checked})}
+                              className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                            />
+                            อัปเดตราคา (บาท)
+                         </label>
+                      </div>
+                      <input 
+                        type="number" 
+                        placeholder="0.00" 
+                        disabled={!bulkEditValues.applyPrice}
+                        value={bulkEditValues.price}
+                        onChange={(e) => setBulkEditValues({...bulkEditValues, price: e.target.value})}
+                        className="w-full border border-gray-200 rounded-lg p-2 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-blue-500 outline-none transition"
+                      />
+                   </div>
+
+                   {/* Stock Field */}
+                   <div className={`p-4 rounded-xl border-2 transition-all ${bulkEditValues.applyStock ? 'border-blue-500 bg-blue-50/30' : 'border-gray-100 bg-white'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                         <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer select-none">
+                            <input 
+                              type="checkbox" 
+                              checked={bulkEditValues.applyStock} 
+                              onChange={(e) => setBulkEditValues({...bulkEditValues, applyStock: e.target.checked})}
+                              className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                            />
+                            อัปเดตสต็อก (จำนวน)
+                         </label>
+                      </div>
+                      <input 
+                        type="number" 
+                        placeholder="0" 
+                        disabled={!bulkEditValues.applyStock}
+                        value={bulkEditValues.stock}
+                        onChange={(e) => setBulkEditValues({...bulkEditValues, stock: e.target.value})}
+                        className="w-full border border-gray-200 rounded-lg p-2 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-blue-500 outline-none transition"
+                      />
+                      <p className="text-[10px] text-gray-400 mt-2 ml-6">*สำหรับสินค้ามีตัวเลือก จะเป็นการกำหนดสต็อกให้แต่ละตัวเลือกเท่ากัน</p>
+                   </div>
+
+                   {/* Image Field */}
+                   <div className={`p-4 rounded-xl border-2 transition-all ${bulkEditValues.applyImage ? 'border-blue-500 bg-blue-50/30' : 'border-gray-100 bg-white'}`}>
+                      <div className="flex items-center justify-between mb-2">
+                         <label className="flex items-center gap-2 text-sm font-bold text-gray-700 cursor-pointer select-none">
+                            <input 
+                              type="checkbox" 
+                              checked={bulkEditValues.applyImage} 
+                              onChange={(e) => setBulkEditValues({...bulkEditValues, applyImage: e.target.checked})}
+                              className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500"
+                            />
+                            อัปเดต URL รูปภาพ
+                         </label>
+                      </div>
+                      <input 
+                        type="text" 
+                        placeholder="https://..." 
+                        disabled={!bulkEditValues.applyImage}
+                        value={bulkEditValues.image}
+                        onChange={(e) => setBulkEditValues({...bulkEditValues, image: e.target.value})}
+                        className="w-full border border-gray-200 rounded-lg p-2 text-sm disabled:bg-gray-100 disabled:text-gray-400 focus:ring-2 focus:ring-blue-500 outline-none transition"
+                      />
+                   </div>
+                </div>
+
+                <div className="flex justify-end gap-3 pt-2">
+                   <button 
+                     type="button" 
+                     onClick={() => setIsBulkEditModalOpen(false)} 
+                     className="px-6 py-2.5 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-xl font-bold transition-all text-sm"
+                   >
+                     ยกเลิก
+                   </button>
+                   <button 
+                    type="submit" 
+                    className="px-8 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-lg hover:shadow-blue-200 transition-all font-bold active:scale-[0.98] text-sm flex items-center gap-2"
+                   >
+                     <Save size={16} /> บันทึกการแก้ไข
+                   </button>
+                </div>
+             </form>
+          </div>
+        </div>
+      )}
 
       {/* Edit/Add Modal */}
       {isModalOpen && (
