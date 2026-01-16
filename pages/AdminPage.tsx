@@ -1,135 +1,158 @@
 
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { db } from '../services/mockDb';
-import { Product, ProductVariant, Category } from '../types';
+import React, { useState, useEffect, useMemo } from 'react';
+import { db, CATEGORIES } from '../services/mockDb';
+import { Product, ProductVariant } from '../types';
 import { 
-  Package, Plus, Trash2, Edit, Save, X, 
-  Zap, Database, Terminal, 
-  Search, AlertCircle, Box, Layers, 
-  Trash, ShieldAlert, Star, PlusCircle, CheckSquare, 
-  Square, Globe, Wand2, List, Info, BarChart3, 
-  Archive, Eye, EyeOff, Truck, Ruler, Weight, CheckCircle2,
-  Code, Play, RotateCcw, Copy, Check
+  Package, Settings, Plus, Trash2, Edit, Save, X, Search, 
+  ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, 
+  Filter, Zap, Layers, CheckSquare, Square, Star, 
+  Image as ImageIcon, AlertCircle, CheckCircle2, MinusSquare, XCircle
 } from 'lucide-react';
 
 export const AdminPage: React.FC = () => {
+  const [activeTab, setActiveTab] = useState<'products' | 'settings'>('products');
+  
+  // Data State
   const [products, setProducts] = useState<Product[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  
+  // UI State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
-  // Category management state
-  const [isCategoryModalOpen, setIsCategoryModalOpen] = useState(false);
-  const [editingCategory, setEditingCategory] = useState<Category | null>(null);
-  const [categoryFormData, setCategoryFormData] = useState<Partial<Category>>({
-    name: '',
-    icon: '',
-    isActive: true
-  });
+  // Filter & Search State
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   
-  // Confirmation Modals
-  const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
-  const [bulkDeleteConfirm, setBulkDeleteConfirm] = useState<'products' | 'categories' | null>(null);
+  // Pagination State
+  const [productPage, setProductPage] = useState(1);
+  const itemsPerPage = 10;
   
-  const [tagInput, setTagInput] = useState('');
-  const [seoKeywordInput, setSeoKeywordInput] = useState('');
-
-  // Selection/Bulk Actions Products
-  const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
-
-  // Selection/Bulk Actions Categories
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState<number[]>([]);
-
-  // Navigation State
-  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'database'>('products');
-
   // Sorting State
   const [sortConfig, setSortConfig] = useState<{ key: keyof Product; direction: 'asc' | 'desc' } | null>(null);
-  
-  // Filter State
-  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('All');
-  const [filterStock, setFilterStock] = useState<'all' | 'low' | 'out'>('all');
-  const [searchQuery, setSearchQuery] = useState('');
 
-  // SQL Terminal State
-  const [sqlCommand, setSqlCommand] = useState("SELECT * FROM products WHERE stock < 10;");
-  const [sqlResult, setSqlResult] = useState<any[]>([]);
-  const [isExecutingSql, setIsExecutingSql] = useState(false);
-  const [sqlLog, setSqlLog] = useState<string[]>(["Core System Initialized...", "Awaiting Sequence Command..."]);
-  const terminalEndRef = useRef<HTMLDivElement>(null);
+  // Bulk Action State
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
 
-  // Product Form State
+  // Form State
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
-    brand: '',
-    sku: '',
     price: 0,
+    originalPrice: 0,
     category: '',
     stock: 0,
-    description: '',
-    weight: 0,
-    dimensions: '',
-    image: '',
+    discount: 0,
+    isFlashSale: false,
     isFeatured: false,
-    tags: [],
-    variants: [],
-    seoUrl: '',
-    seoKeywords: [],
-    seoDescription: ''
+    image: '',
+    variants: []
   });
+
+  const [variantErrors, setVariantErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     refreshData();
   }, []);
 
   useEffect(() => {
-    terminalEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [sqlLog]);
+    setProductPage(1);
+  }, [productSearchQuery, selectedCategory]);
 
   const refreshData = () => {
     setProducts([...db.getProducts()]);
-    setCategories([...db.getCategories()]);
   };
 
-  const stats = useMemo(() => {
-    const total = products.length;
-    const inventoryValue = products.reduce((acc, p) => acc + (p.stock * (p.price || 0)), 0);
-    const lowStock = products.filter(p => p.stock > 0 && p.stock < 10).length;
-    const totalSold = products.reduce((acc, p) => acc + (p.sold || 0), 0);
-    return { total, lowStock, inventoryValue, totalSold };
-  }, [products]);
+  const requestSort = (key: keyof Product) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    }
+    setSortConfig({ key, direction });
+  };
 
-  const confirmDelete = () => {
-    if (deleteConfirmId !== null) {
-      db.deleteProduct(deleteConfirmId);
-      setDeleteConfirmId(null);
+  const getSortIcon = (key: keyof Product) => {
+    if (!sortConfig || sortConfig.key !== key) {
+      return <ArrowUpDown size={14} className="text-gray-400" />;
+    }
+    return sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />;
+  };
+
+  const processedProducts = useMemo(() => {
+    let result = products.filter(product => {
+      const searchLower = productSearchQuery.toLowerCase().trim();
+      const matchesSearch = 
+        product.name.toLowerCase().includes(searchLower) ||
+        product.category.toLowerCase().includes(searchLower) ||
+        product.id.toString().includes(searchLower);
+        
+      const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
+      return matchesSearch && matchesCategory;
+    });
+
+    if (sortConfig !== null) {
+      result.sort((a, b) => {
+        const aValue = a[sortConfig.key];
+        const bValue = b[sortConfig.key];
+        if (aValue === undefined || bValue === undefined) return 0;
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return result;
+  }, [products, productSearchQuery, selectedCategory, sortConfig]);
+
+  const indexOfLastItem = productPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentProducts = processedProducts.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(processedProducts.length / itemsPerPage);
+
+  const handleSelectAllOnPage = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const currentPageIds = currentProducts.map(p => p.id);
+    if (e.target.checked) {
+      const newSelection = Array.from(new Set([...selectedIds, ...currentPageIds]));
+      setSelectedIds(newSelection);
+    } else {
+      setSelectedIds(selectedIds.filter(id => !currentPageIds.includes(id)));
+    }
+  };
+
+  const isAllOnPageSelected = currentProducts.length > 0 && currentProducts.every(p => selectedIds.includes(p.id));
+  const isSomeOnPageSelected = currentProducts.some(p => selectedIds.includes(p.id)) && !isAllOnPageSelected;
+
+  const handleDelete = (id: number) => {
+    if (confirm('คุณแน่ใจหรือไม่ที่จะลบสินค้านี้?')) {
+      db.deleteProduct(id);
+      setSelectedIds(selectedIds.filter(sid => sid !== id));
       refreshData();
     }
   };
 
   const handleBulkDelete = () => {
-    if (bulkDeleteConfirm === 'products') {
-      db.bulkDeleteProducts(selectedProductIds);
-      setSelectedProductIds([]);
-    } else if (bulkDeleteConfirm === 'categories') {
-      db.bulkDeleteCategories(selectedCategoryIds);
-      setSelectedCategoryIds([]);
-    }
-    setBulkDeleteConfirm(null);
+    if (!confirm(`ยืนยันการลบสินค้า ${selectedIds.length} รายการที่เลือกไว้?`)) return;
+    selectedIds.forEach(id => db.deleteProduct(id));
+    setSelectedIds([]);
     refreshData();
   };
 
   const handleEdit = (product: Product) => {
     setEditingProduct(product);
-    setFormData({
-      ...product,
-      tags: product.tags || [],
-      variants: product.variants || [],
-      seoKeywords: product.seoKeywords || [],
-      seoDescription: product.seoDescription || ''
+    const variants = product.variants || [];
+    
+    const price = variants.length > 0
+      ? Math.min(...variants.map(v => Number(v.price) || Infinity))
+      : product.price;
+
+    const totalStock = variants.length > 0
+      ? variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0)
+      : product.stock;
+
+    setFormData({ 
+      ...product, 
+      variants: variants,
+      stock: totalStock,
+      price: price === Infinity ? product.price : price
     });
-    setTagInput('');
-    setSeoKeywordInput('');
+    setVariantErrors({});
     setIsModalOpen(true);
   };
 
@@ -137,705 +160,577 @@ export const AdminPage: React.FC = () => {
     setEditingProduct(null);
     setFormData({
        name: '',
-       brand: '',
-       sku: `SKU-${Date.now().toString().slice(-6)}`,
        price: 0,
-       category: categories[0]?.name || 'เครื่องใช้ไฟฟ้า',
+       originalPrice: 0,
+       category: CATEGORIES[0].name,
        stock: 10,
-       image: 'https://images.unsplash.com/photo-1556740738-b6a63e27c4df?w=400',
+       image: '',
        sold: 0,
        discount: 0,
        isFlashSale: false,
        isFeatured: false,
-       tags: [],
-       description: '',
-       weight: 0,
-       dimensions: '',
-       variants: [],
-       seoUrl: '',
-       seoKeywords: [],
-       seoDescription: ''
+       variants: []
     });
-    setTagInput('');
-    setSeoKeywordInput('');
+    setVariantErrors({});
     setIsModalOpen(true);
+  };
+
+  const validateUniqueNames = (variants: ProductVariant[]) => {
+    const errors: Record<string, string> = {};
+    const nameCount: Record<string, number> = {};
+    
+    variants.forEach(v => {
+      const name = v.name.trim().toLowerCase();
+      if (name) {
+        nameCount[name] = (nameCount[name] || 0) + 1;
+      }
+    });
+
+    variants.forEach(v => {
+      const name = v.name.trim().toLowerCase();
+      if (name && nameCount[name] > 1) {
+        errors[v.id] = 'ชื่อตัวเลือกนี้ซ้ำกัน กรุณาแก้ไข';
+      } else {
+        errors[v.id] = '';
+      }
+    });
+    setVariantErrors(errors);
+    return errors;
+  };
+
+  const updateMainDataFromVariants = (variants: ProductVariant[]) => {
+    const totalStock = variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
+    const validPrices = variants.map(v => Number(v.price) || Infinity).filter(p => p !== Infinity);
+    const minVariantPrice = validPrices.length > 0 ? Math.min(...validPrices) : (formData.price || 0);
+
+    return { totalStock, minVariantPrice };
+  };
+
+  const handleAddVariant = () => {
+    const newVariant: ProductVariant = {
+      id: Math.random().toString(36).substr(2, 9),
+      name: '',
+      price: formData.price || 0,
+      stock: 0,
+      image: ''
+    };
+    const updatedVariants = [...(formData.variants || []), newVariant];
+    const { totalStock, minVariantPrice } = updateMainDataFromVariants(updatedVariants);
+
+    validateUniqueNames(updatedVariants);
+    setFormData({
+      ...formData,
+      variants: updatedVariants,
+      stock: totalStock,
+      price: minVariantPrice
+    });
+  };
+
+  const handleUpdateVariant = (id: string, field: keyof ProductVariant, value: string | number) => {
+    const updatedVariants = (formData.variants || []).map(v => 
+      v.id === id ? { ...v, [field]: value } : v
+    );
+    
+    const { totalStock, minVariantPrice } = updateMainDataFromVariants(updatedVariants);
+
+    if (field === 'name') {
+      validateUniqueNames(updatedVariants);
+    }
+
+    setFormData({
+      ...formData,
+      variants: updatedVariants,
+      stock: totalStock,
+      price: minVariantPrice
+    });
+  };
+
+  const handleRemoveVariant = (id: string) => {
+    const updatedVariants = (formData.variants || []).filter(v => v.id !== id);
+    const { totalStock, minVariantPrice } = updateMainDataFromVariants(updatedVariants);
+    
+    validateUniqueNames(updatedVariants);
+    setFormData({
+      ...formData,
+      variants: updatedVariants,
+      stock: totalStock,
+      price: minVariantPrice
+    });
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const errors = validateUniqueNames(formData.variants || []);
+    if (Object.values(errors).some(err => err !== '')) {
+      alert('ไม่สามารถบันทึกได้เนื่องจากมีชื่อตัวเลือกที่ซ้ำกัน');
+      return;
+    }
+
     if (editingProduct) {
       db.updateProduct({ ...editingProduct, ...formData } as Product);
     } else {
-      db.addProduct({ ...formData, id: Date.now(), sold: 0 } as Product);
+      db.addProduct({ ...formData, sold: 0 } as Product);
     }
     setIsModalOpen(false);
     refreshData();
   };
 
-  const updateVariant = (id: string, field: keyof ProductVariant, value: any) => {
-    setFormData(prev => ({
-      ...prev,
-      variants: prev.variants?.map(v => v.id === id ? { ...v, [field]: value } : v)
-    }));
-  };
-
-  const generateSEO = () => {
-    if (!formData.name) return;
-    const brandPart = formData.brand ? `${formData.brand}-` : '';
-    const slug = `${brandPart}${formData.name}`.toLowerCase().trim().replace(/[^\w\sก-๙\-]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-');
-    let finalDesc = (formData.seoDescription || '').trim();
-    if (!finalDesc) {
-      finalDesc = (formData.description || '').replace(/<[^>]*>?/gm, '').substring(0, 150) + '...';
-    }
-    setFormData(prev => ({ ...prev, seoUrl: slug, seoDescription: finalDesc.substring(0, 160) }));
-  };
-
-  const processedProducts = useMemo(() => {
-    let result = [...products];
-    if (selectedCategoryFilter !== 'All') result = result.filter(p => p.category === selectedCategoryFilter);
-    if (filterStock === 'low') result = result.filter(p => p.stock > 0 && p.stock < 10);
-    if (filterStock === 'out') result = result.filter(p => p.stock === 0);
-    if (searchQuery) {
-      const lowerQuery = searchQuery.toLowerCase();
-      result = result.filter(p => p.name.toLowerCase().includes(lowerQuery) || p.brand?.toLowerCase().includes(lowerQuery) || p.sku?.toLowerCase().includes(lowerQuery));
-    }
-    return result;
-  }, [products, selectedCategoryFilter, filterStock, searchQuery]);
-
-  const handleInlineStockUpdate = (product: Product, newStock: number) => {
-    if (newStock < 0) newStock = 0;
-    const updatedProduct = { ...product, stock: newStock };
-    setProducts(prev => prev.map(p => p.id === product.id ? updatedProduct : p));
-    db.updateProduct(updatedProduct);
-  };
-
-  const executeSql = () => {
-    if (!sqlCommand.trim()) return;
-    setIsExecutingSql(true);
-    setSqlLog(prev => [...prev, `> ${sqlCommand}`]);
-    
-    setTimeout(() => {
-      setIsExecutingSql(false);
-      const lowerCmd = sqlCommand.toLowerCase();
-      if (lowerCmd.includes('select')) {
-        let results = [...products];
-        if (lowerCmd.includes('where stock < 10')) results = products.filter(p => p.stock < 10);
-        setSqlResult(results.slice(0, 5));
-        setSqlLog(prev => [...prev, `Success: ${results.length} rows returned.`]);
-      } else {
-        setSqlLog(prev => [...prev, `Error: Operation not permitted in read-only console.`]);
-      }
-    }, 600);
-  };
-
-  const toggleSelectAllProducts = () => {
-    if (selectedProductIds.length === processedProducts.length) setSelectedProductIds([]);
-    else setSelectedProductIds(processedProducts.map(p => p.id));
-  };
-
-  const toggleSelectOneProduct = (id: number) => {
-    setSelectedProductIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
-
-  const toggleSelectAllCategories = () => {
-    if (selectedCategoryIds.length === categories.length) setSelectedCategoryIds([]);
-    else setSelectedCategoryIds(categories.map(c => c.id));
-  };
-
-  const toggleSelectOneCategory = (id: number) => {
-    setSelectedCategoryIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-  };
-
-  const handleBulkCategoryAction = (action: 'enable' | 'disable' | 'delete') => {
-    if (action === 'enable') {
-      db.bulkUpdateCategoryStatus(selectedCategoryIds, true);
-      setSelectedCategoryIds([]);
-    } else if (action === 'disable') {
-      db.bulkUpdateCategoryStatus(selectedCategoryIds, false);
-      setSelectedCategoryIds([]);
-    } else if (action === 'delete') {
-      setBulkDeleteConfirm('categories');
-    }
-    refreshData();
-  };
+  const hasVariants = formData.variants && formData.variants.length > 0;
 
   return (
-    <div className="flex h-screen bg-[#f1f5f9] text-slate-800 font-sans overflow-hidden">
-      {/* Sidebar Navigation */}
-      <aside className="w-80 bg-[#001f3f] text-white flex flex-col shadow-2xl shrink-0 hidden lg:flex relative z-30">
-        <div className="p-10 border-b border-white/10">
-          <div className="flex items-center gap-4">
-             <div className="bg-blue-600 p-3 rounded-2xl shadow-lg shadow-blue-500/20">
-               <Database size={28} className="text-white" />
-             </div>
-             <div>
-               <div className="font-black text-2xl tracking-tighter uppercase leading-none">WAREE</div>
-               <div className="text-[10px] text-blue-400 font-black tracking-[0.4em] uppercase opacity-60 mt-2">Core Registry</div>
-             </div>
-          </div>
+    <div className="flex h-screen bg-gray-100 font-sans">
+      <aside className="w-64 bg-[#1a237e] text-white flex flex-col hidden md:flex">
+        <div className="p-6 text-2xl font-bold tracking-wider border-b border-blue-800">
+          Admin<span className="text-orange-400">Panel</span>
         </div>
-        <nav className="flex-1 p-8 space-y-3 mt-6">
-          <button onClick={() => setActiveTab('products')} className={`w-full flex items-center gap-4 px-6 py-5 rounded-[2rem] transition-all group ${activeTab === 'products' ? 'bg-blue-600 text-white shadow-2xl shadow-blue-600/30' : 'text-blue-200/50 hover:bg-white/5 hover:text-white'}`}>
-            <Package size={22} className={activeTab === 'products' ? 'animate-pulse' : ''} /> 
-            <span className="font-black text-sm uppercase tracking-widest">Product Matrix</span>
+        <nav className="flex-1 p-4 space-y-2">
+          <button onClick={() => setActiveTab('products')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition text-left ${activeTab === 'products' ? 'bg-blue-800 text-white shadow-inner' : 'text-gray-300 hover:bg-blue-800 hover:text-white'}`}>
+            <Package size={20} /> รายการสินค้า
           </button>
-          <button onClick={() => setActiveTab('categories')} className={`w-full flex items-center gap-4 px-6 py-5 rounded-[2rem] transition-all group ${activeTab === 'categories' ? 'bg-blue-600 text-white shadow-2xl shadow-blue-600/30' : 'text-blue-200/50 hover:bg-white/5 hover:text-white'}`}>
-            <List size={22} /> 
-            <span className="font-black text-sm uppercase tracking-widest">Taxonomy Hub</span>
-          </button>
-          <button onClick={() => setActiveTab('database')} className={`w-full flex items-center gap-4 px-6 py-5 rounded-[2rem] transition-all group ${activeTab === 'database' ? 'bg-blue-600 text-white shadow-2xl shadow-blue-600/30' : 'text-blue-200/50 hover:bg-white/5 hover:text-white'}`}>
-            <Terminal size={22} /> 
-            <span className="font-black text-sm uppercase tracking-widest">SQL Terminal</span>
+          <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition text-left ${activeTab === 'settings' ? 'bg-blue-800 text-white' : 'text-gray-300 hover:bg-blue-800 hover:text-white'}`}>
+            <Settings size={20} /> ตั้งค่าระบบ
           </button>
         </nav>
-        <div className="p-10 border-t border-white/10 bg-black/10">
-           <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-[1.5rem] bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center font-black text-xl border border-white/20 shadow-lg">A</div>
-              <div>
-                <div className="text-xs font-black uppercase tracking-widest">Root Architect</div>
-                <div className="text-[9px] text-blue-400/50 font-black uppercase tracking-tighter mt-1 flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></div> Online Status
-                </div>
-              </div>
-           </div>
-        </div>
       </aside>
 
-      <main className="flex-1 overflow-y-auto bg-[#f8fafc] flex flex-col no-scrollbar scroll-smooth">
+      <main className="flex-1 overflow-y-auto relative pb-24 no-scrollbar">
         {activeTab === 'products' && (
-          <div className="p-10 space-y-10">
-            <header className="flex justify-between items-center bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
-                <div>
-                  <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-3">Inventory Matrix</h1>
-                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.5em] flex items-center gap-2">
-                    <Archive size={14} /> Master Registry Control
-                  </p>
-                </div>
-                <div className="flex items-center gap-4">
-                    {selectedProductIds.length > 0 && (
-                      <div className="flex items-center gap-3 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100 animate-in slide-in-from-right">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2">{selectedProductIds.length} Selected</span>
-                        <button onClick={() => setBulkDeleteConfirm('products')} className="text-red-500 hover:bg-red-50 p-2 rounded-lg" title="Bulk Delete">
-                          <Trash size={20} />
-                        </button>
-                      </div>
-                    )}
-                    <button onClick={handleAddNew} className="bg-blue-600 text-white px-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest flex items-center gap-3 shadow-2xl shadow-blue-600/30 hover:shadow-blue-600/50 hover:-translate-y-1 transition-all">
-                      <PlusCircle size={22} /> New Registry Entry
-                    </button>
-                </div>
+          <>
+            <header className="bg-white shadow-sm px-4 md:px-8 py-4 flex justify-between items-center sticky top-0 z-30">
+              <div>
+                <h1 className="text-xl font-bold text-gray-800">จัดการคลังสินค้า</h1>
+                <p className="text-xs text-gray-400">มีสินค้าทั้งหมด {products.length} รายการ</p>
+              </div>
+              <button 
+                onClick={handleAddNew}
+                className="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all shadow-lg hover:shadow-green-100 font-bold active:scale-95"
+              >
+                <Plus size={18} /> เพิ่มสินค้าใหม่
+              </button>
             </header>
 
-            {/* Performance Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                {[
-                  { label: "Density", value: stats.total, icon: Box, color: "blue" },
-                  { label: "Critical", value: stats.lowStock, icon: AlertCircle, color: "red" },
-                  { label: "Velocity", value: stats.totalSold, icon: BarChart3, color: "emerald" },
-                  { label: "Equity", value: `฿${(stats.inventoryValue / 1000000).toFixed(1)}M`, icon: Zap, color: "amber" }
-                ].map((card, i) => (
-                  <div key={i} className="bg-white p-8 rounded-[3rem] border border-slate-200 shadow-soft flex items-center gap-6">
-                      <div className={`w-16 h-16 bg-${card.color}-50 text-${card.color}-600 rounded-[1.5rem] flex items-center justify-center shadow-inner`}>
-                          <card.icon size={28} />
-                      </div>
-                      <div>
-                          <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-2">{card.label}</div>
-                          <div className="text-3xl font-black text-slate-900 leading-tight">{card.value}</div>
-                      </div>
-                  </div>
-                ))}
-            </div>
-
-            {/* Product Table */}
-            <div className="bg-white rounded-[4rem] shadow-2xl border border-slate-100 overflow-hidden">
-                <div className="px-10 py-8 border-b bg-slate-50/50 flex gap-6 items-center">
-                    <div className="relative flex-1 group">
-                        <Search size={20} className="absolute left-6 top-1/2 -translate-y-1/2 text-slate-300 group-focus-within:text-blue-600 transition-colors" />
-                        <input type="text" placeholder="Query Matrix..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-white border border-slate-200 pl-14 pr-8 py-5 rounded-[2rem] text-sm font-bold outline-none focus:ring-8 focus:ring-blue-500/5 shadow-inner" />
+            <div className="p-4 md:p-8">
+              {/* Prominent Search and Filters */}
+              <div className="bg-white p-6 rounded-2xl shadow-md mb-8 flex flex-col lg:flex-row gap-6 justify-between items-center border border-gray-100 ring-1 ring-black/5">
+                 <div className="relative w-full lg:flex-1 group">
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 flex items-center gap-2 text-gray-400 group-focus-within:text-blue-500 transition-colors pointer-events-none">
+                      <Search size={22} strokeWidth={2.5} />
                     </div>
-                    <select value={selectedCategoryFilter} onChange={e => setSelectedCategoryFilter(e.target.value)} className="bg-white border border-slate-200 px-8 py-5 rounded-[2rem] text-xs font-black uppercase tracking-widest outline-none shadow-sm cursor-pointer hover:bg-slate-50 transition-all">
-                      <option value="All">All Clusters</option>
-                      {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                    </select>
-                </div>
-
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left border-collapse">
-                        <thead className="bg-slate-50 text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">
-                            <tr>
-                                <th className="px-10 py-8 w-12 text-center border-b">
-                                  <button onClick={toggleSelectAllProducts} className="text-blue-600">
-                                    {selectedProductIds.length === processedProducts.length && processedProducts.length > 0 ? <CheckSquare size={24} /> : <Square size={24} />}
-                                  </button>
-                                </th>
-                                <th className="px-10 py-8 border-b">Product Hierarchy</th>
-                                <th className="px-10 py-8 border-b">Logistics</th>
-                                <th className="px-10 py-8 border-b text-right">Unit Point</th>
-                                <th className="px-10 py-8 border-b text-center">Engine</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {processedProducts.map(p => (
-                                <tr key={p.id} className="group hover:bg-blue-50/20 transition-all">
-                                    <td className="px-10 py-6 text-center">
-                                      <button onClick={() => toggleSelectOneProduct(p.id)} className="text-blue-600">
-                                        {selectedProductIds.includes(p.id) ? <CheckSquare size={20} /> : <Square size={20} className="text-slate-200" />}
-                                      </button>
-                                    </td>
-                                    <td className="px-10 py-6">
-                                        <div className="flex items-center gap-6">
-                                            <div className="w-16 h-16 rounded-[1.5rem] bg-slate-50 p-2 border border-slate-100 shrink-0 overflow-hidden relative">
-                                                <img src={p.image} className="w-full h-full object-contain mix-blend-multiply" alt={p.name} />
-                                                {p.isFeatured && <div className="absolute top-0 right-0 bg-amber-400 text-white p-1 rounded-bl-xl shadow-sm"><Star size={10} fill="currentColor" /></div>}
-                                            </div>
-                                            <div>
-                                                <div className="font-black text-slate-900 text-sm leading-none mb-2">{p.name}</div>
-                                                <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{p.sku} | {p.category}</div>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="px-10 py-6">
-                                        <div className="flex flex-col gap-2">
-                                          <div className={`text-[8px] font-black uppercase px-2 py-1 rounded w-fit ${p.stock < 10 ? 'bg-red-500 text-white' : 'bg-emerald-500 text-white'}`}>
-                                            {p.stock < 10 ? 'Low Stock' : 'Optimal'}
-                                          </div>
-                                          <input type="number" min="0" className="w-20 bg-slate-50 border border-slate-200 rounded-xl px-4 py-2 text-xs font-black text-center" value={p.stock} onChange={(e) => handleInlineStockUpdate(p, parseInt(e.target.value) || 0)} />
-                                        </div>
-                                    </td>
-                                    <td className="px-10 py-6 text-right">
-                                        <div className="font-black text-slate-900 text-xl tracking-tighter">฿{p.price.toLocaleString()}</div>
-                                    </td>
-                                    <td className="px-10 py-6">
-                                        <div className="flex justify-center gap-3 opacity-0 group-hover:opacity-100 transition-all duration-300">
-                                            <button onClick={() => handleEdit(p)} className="p-4 bg-blue-50 text-blue-600 rounded-[1.5rem] hover:bg-blue-600 hover:text-white transition-all shadow-sm"><Edit size={18} /></button>
-                                            <button onClick={() => setDeleteConfirmId(p.id)} className="p-4 bg-red-50 text-red-600 rounded-[1.5rem] hover:bg-red-600 hover:text-white transition-all shadow-sm"><Trash2 size={18} /></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-          </div>
-        )}
-
-        {activeTab === 'categories' && (
-          <div className="p-10 space-y-10 animate-in fade-in">
-             <header className="flex justify-between items-center bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
-                <div>
-                  <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-3">Taxonomy Hub</h1>
-                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.5em] flex items-center gap-2">
-                    <List size={14} /> Global Taxonomy Structure
-                  </p>
-                </div>
-                <div className="flex items-center gap-4">
-                    {selectedCategoryIds.length > 0 && (
-                      <div className="flex items-center gap-2 bg-slate-50 px-6 py-3 rounded-2xl border border-slate-100">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-4">{selectedCategoryIds.length} Selected</span>
-                        <div className="flex gap-1">
-                          <button onClick={() => handleBulkCategoryAction('enable')} className="p-2.5 text-emerald-600 hover:bg-emerald-50 rounded-xl transition-all" title="Enable Selection"><Eye size={20} /></button>
-                          <button onClick={() => handleBulkCategoryAction('disable')} className="p-2.5 text-amber-600 hover:bg-amber-50 rounded-xl transition-all" title="Disable Selection"><EyeOff size={20} /></button>
-                          <button onClick={() => handleBulkCategoryAction('delete')} className="p-2.5 text-red-600 hover:bg-red-50 rounded-xl transition-all" title="Delete Selection"><Trash size={20} /></button>
-                        </div>
-                      </div>
-                    )}
-                    <button onClick={() => setIsCategoryModalOpen(true)} className="bg-blue-600 text-white px-10 py-5 rounded-[2rem] font-black text-xs uppercase tracking-widest flex items-center gap-3 shadow-2xl hover:shadow-blue-600/50 transition-all">
-                      <Plus size={22} /> Create New Cluster
-                    </button>
-                </div>
-             </header>
-
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
-                {categories.map(cat => (
-                  <div key={cat.id} className={`bg-white p-8 rounded-[3.5rem] border shadow-soft flex flex-col items-center gap-6 group hover:border-blue-300 transition-all ${selectedCategoryIds.includes(cat.id) ? 'border-blue-500 ring-8 ring-blue-500/5 bg-blue-50/5' : 'border-slate-100'}`}>
-                    <div className="flex justify-between w-full">
-                       <button onClick={() => toggleSelectOneCategory(cat.id)} className="text-blue-600">
-                          {selectedCategoryIds.includes(cat.id) ? <CheckSquare size={28} /> : <Square size={28} className="text-slate-100 group-hover:text-slate-200" />}
-                       </button>
-                       <div className={`w-3.5 h-3.5 rounded-full ${cat.isActive !== false ? 'bg-emerald-500' : 'bg-slate-200'}`}></div>
-                    </div>
-                    <div className={`w-32 h-32 rounded-[2.5rem] overflow-hidden border-8 border-slate-50 shadow-inner group-hover:scale-105 transition-all ${cat.isActive === false ? 'grayscale opacity-50' : ''}`}>
-                      <img src={cat.icon} className="w-full h-full object-cover" alt={cat.name} />
-                    </div>
-                    <div className="text-center">
-                      <div className="font-black text-slate-900 text-xl uppercase tracking-tighter leading-tight mb-2">{cat.name}</div>
-                      <div className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{products.filter(p => p.category === cat.name).length} Nodes Assigned</div>
-                    </div>
-                    <div className="flex gap-3 w-full pt-6 border-t border-slate-50">
-                      <button onClick={() => { setEditingCategory(cat); setCategoryFormData(cat); setIsCategoryModalOpen(true); }} className="flex-1 flex items-center justify-center gap-2 py-4 bg-slate-50 text-slate-900 rounded-[1.5rem] hover:bg-blue-600 hover:text-white transition-all font-black text-[10px] uppercase tracking-widest">
-                        <Edit size={16} /> Edit
+                    <input 
+                       type="text" 
+                       placeholder="ค้นหาตามชื่อสินค้า, หมวดหมู่ หรือรหัสสินค้า (#123)..." 
+                       value={productSearchQuery}
+                       onChange={(e) => setProductSearchQuery(e.target.value)}
+                       className="w-full pl-14 pr-12 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base font-medium shadow-inner"
+                    />
+                    {productSearchQuery && (
+                      <button 
+                        onClick={() => setProductSearchQuery('')}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 hover:text-gray-500 transition-colors"
+                      >
+                        <XCircle size={20} />
                       </button>
-                      <button onClick={() => db.deleteCategory(cat.id)} className="p-4 bg-red-50 text-red-600 rounded-[1.5rem] hover:bg-red-600 hover:text-white transition-all shadow-sm"><Trash2 size={16} /></button>
-                    </div>
-                  </div>
-                ))}
-             </div>
-          </div>
-        )}
+                    )}
+                 </div>
+                 <div className="flex gap-4 w-full lg:w-auto">
+                     <div className="flex-1 lg:w-64 relative">
+                       <Filter className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                       <select
+                          value={selectedCategory}
+                          onChange={(e) => setSelectedCategory(e.target.value)}
+                          className="w-full pl-12 pr-10 py-4 bg-gray-50 border-2 border-transparent rounded-2xl text-sm font-bold focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none cursor-pointer appearance-none shadow-inner"
+                        >
+                          <option value="All">ทุกหมวดหมู่</option>
+                          {CATEGORIES.map(cat => (
+                            <option key={cat.id} value={cat.name}>{cat.name}</option>
+                          ))}
+                        </select>
+                        <ChevronRight className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 rotate-90" size={16} />
+                     </div>
+                 </div>
+              </div>
 
-        {activeTab === 'database' && (
-          <div className="p-10 space-y-10 animate-in fade-in">
-             <header className="flex justify-between items-center bg-white p-10 rounded-[3rem] shadow-sm border border-slate-100">
-                <div>
-                  <h1 className="text-4xl font-black text-slate-900 tracking-tight leading-none mb-3">SQL Terminal</h1>
-                  <p className="text-slate-400 text-[10px] font-black uppercase tracking-[0.5em] flex items-center gap-2">
-                    <Terminal size={14} /> Advanced Query Engine
-                  </p>
-                </div>
-                <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 px-6 py-4 bg-emerald-50 text-emerald-600 rounded-2xl border border-emerald-100 font-black text-[10px] uppercase tracking-widest">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div> DB Status: Connected
-                    </div>
-                </div>
-             </header>
-
-             <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-                {/* SQL Input Area */}
-                <div className="lg:col-span-7 flex flex-col gap-6">
-                   <div className="bg-[#1e293b] rounded-[3rem] shadow-2xl p-8 flex flex-col border border-slate-700/50">
-                      <div className="flex items-center justify-between mb-6 border-b border-slate-700/50 pb-6 px-4">
-                         <div className="flex items-center gap-3">
-                            <div className="flex gap-1.5">
-                               <div className="w-3 h-3 rounded-full bg-red-500/80"></div>
-                               <div className="w-3 h-3 rounded-full bg-amber-500/80"></div>
-                               <div className="w-3 h-3 rounded-full bg-emerald-500/80"></div>
-                            </div>
-                            <span className="text-slate-400 font-mono text-xs ml-4">Registry_Sequence_Compiler.sh</span>
+              {/* Data Table */}
+              <div className="bg-white rounded-2xl shadow-sm overflow-hidden border border-gray-100 overflow-x-auto transition-all">
+                <table className="w-full text-left border-collapse min-w-[900px]">
+                  <thead className="bg-gray-50 text-gray-500 uppercase text-[10px] font-bold tracking-widest border-b">
+                    <tr>
+                      <th className="p-4 w-12 text-center bg-gray-50/50">
+                         <div className="flex items-center justify-center">
+                           <input 
+                            type="checkbox" 
+                            checked={isAllOnPageSelected} 
+                            ref={el => {
+                              if (el) el.indeterminate = isSomeOnPageSelected;
+                            }}
+                            onChange={handleSelectAllOnPage} 
+                            className="cursor-pointer w-5 h-5 rounded-md text-blue-600 focus:ring-blue-500 border-gray-300 transition-all" 
+                           />
                          </div>
-                         <div className="flex items-center gap-4">
-                            <button onClick={() => setSqlCommand("")} className="text-slate-500 hover:text-white transition-colors" title="Clear Console"><RotateCcw size={16} /></button>
-                            <button onClick={executeSql} disabled={isExecutingSql} className="bg-blue-600 hover:bg-blue-500 disabled:bg-slate-600 text-white px-8 py-3 rounded-2xl font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-3 shadow-xl transition-all active:scale-95">
-                               {isExecutingSql ? <RotateCcw size={16} className="animate-spin" /> : <Play size={16} />} Execute Sequence
-                            </button>
-                         </div>
-                      </div>
-                      
-                      <div className="flex-1 bg-black/30 rounded-2xl p-6 mb-6">
-                        <textarea 
-                          value={sqlCommand} 
-                          onChange={(e) => setSqlCommand(e.target.value)}
-                          className="w-full bg-transparent text-emerald-400 font-mono text-sm resize-none outline-none h-48 leading-relaxed" 
-                          spellCheck="false"
-                        />
-                      </div>
-
-                      <div className="bg-black/50 rounded-2xl p-6 h-64 overflow-y-auto font-mono text-[11px] no-scrollbar">
-                         {sqlLog.map((log, i) => (
-                           <div key={i} className={`mb-2 ${log.startsWith('>') ? 'text-blue-400' : log.startsWith('Error') ? 'text-red-400' : 'text-slate-400'}`}>
-                              {log}
-                           </div>
-                         ))}
-                         <div ref={terminalEndRef} />
-                      </div>
-                   </div>
-                </div>
-
-                {/* SQL Result Visualization */}
-                <div className="lg:col-span-5 space-y-8">
-                   <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-slate-200">
-                      <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-[0.5em] mb-8 flex items-center gap-3">
-                         <Layers size={20} /> Matrix Projection
-                      </h4>
-                      {sqlResult.length > 0 ? (
-                        <div className="space-y-6">
-                           {sqlResult.map(res => (
-                             <div key={res.id} className="flex items-center gap-6 p-4 hover:bg-slate-50 rounded-2xl border border-slate-100 transition-all group">
-                                <div className="w-12 h-12 rounded-xl bg-slate-50 p-1 border border-slate-100 shrink-0">
-                                   <img src={res.image} className="w-full h-full object-contain mix-blend-multiply" />
-                                </div>
-                                <div className="flex-1 min-w-0">
-                                   <div className="font-black text-slate-900 text-xs truncate uppercase tracking-tight">{res.name}</div>
-                                   <div className="text-[9px] text-slate-400 font-black uppercase tracking-widest mt-1">Stock: {res.stock} Unit Node</div>
+                      </th>
+                      <th className="p-4 cursor-pointer hover:text-blue-600 transition" onClick={() => requestSort('id')}>รหัส {getSortIcon('id')}</th>
+                      <th className="p-4 cursor-pointer hover:text-blue-600 transition" onClick={() => requestSort('name')}>ชื่อสินค้า {getSortIcon('name')}</th>
+                      <th className="p-4 cursor-pointer hover:text-blue-600 transition" onClick={() => requestSort('category')}>หมวดหมู่ {getSortIcon('category')}</th>
+                      <th className="p-4 text-right cursor-pointer hover:text-blue-600 transition" onClick={() => requestSort('price')}>ราคาเริ่มต้น {getSortIcon('price')}</th>
+                      <th className="p-4 text-center cursor-pointer hover:text-blue-600 transition" onClick={() => requestSort('stock')}>คงเหลือ {getSortIcon('stock')}</th>
+                      <th className="p-4 text-center">จัดการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {currentProducts.map((product) => {
+                      const isSelected = selectedIds.includes(product.id);
+                      return (
+                        <tr 
+                          key={product.id} 
+                          className={`group transition-all duration-200 ${isSelected ? 'bg-blue-50/60 border-l-4 border-l-blue-600' : 'hover:bg-gray-50/50 border-l-4 border-l-transparent'}`}
+                        >
+                          <td className="p-4 text-center">
+                             <div className="flex items-center justify-center">
+                               <input 
+                                type="checkbox" 
+                                checked={isSelected} 
+                                onChange={() => {
+                                  if (isSelected) {
+                                    setSelectedIds(selectedIds.filter(id => id !== product.id));
+                                  } else {
+                                    setSelectedIds([...selectedIds, product.id]);
+                                  }
+                                }} 
+                                className="cursor-pointer w-5 h-5 rounded-md text-blue-600 focus:ring-blue-500 border-gray-300 transition-all"
+                               />
+                             </div>
+                          </td>
+                          <td className="p-4 text-gray-400 text-xs font-mono">#{product.id}</td>
+                          <td className="p-4 font-medium text-gray-800 flex items-center gap-3">
+                             <div className="relative w-12 h-12 flex-shrink-0">
+                               <img src={product.image} className="w-full h-full rounded-xl object-cover border border-gray-100 group-hover:scale-110 transition duration-300 shadow-sm" alt="" />
+                               {product.isFeatured && (
+                                 <div className="absolute -top-1 -right-1 bg-yellow-400 p-0.5 rounded-full shadow-sm ring-2 ring-white">
+                                   <Star size={10} className="text-white fill-white" />
+                                 </div>
+                               )}
+                             </div>
+                             <div className="flex flex-col">
+                                <span className="text-sm group-hover:text-blue-600 transition-colors">{product.name}</span>
+                                <div className="flex gap-1.5 mt-1">
+                                  {product.isFlashSale && <span className="text-[8px] bg-orange-100 text-orange-600 px-1.5 py-0.5 rounded-sm font-bold uppercase tracking-tighter shadow-sm">Flash Sale</span>}
+                                  {product.variants && product.variants.length > 0 && (
+                                    <span className="text-[8px] bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-sm font-bold uppercase tracking-tighter flex items-center gap-0.5 shadow-sm">
+                                      <Layers size={8} /> {product.variants.length} ตัวเลือก
+                                    </span>
+                                  )}
                                 </div>
                              </div>
-                           ))}
-                        </div>
-                      ) : (
-                        <div className="h-64 flex flex-col items-center justify-center text-slate-300">
-                           <Code size={48} className="mb-4 opacity-20" />
-                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">No active matrix projection</p>
-                        </div>
-                      )}
-                   </div>
+                          </td>
+                          <td className="p-4 text-xs font-medium text-gray-500">
+                            <span className="bg-gray-100/80 px-2.5 py-1 rounded-lg border border-gray-200/50">{product.category}</span>
+                          </td>
+                          <td className="p-4 text-right font-bold text-gray-700 text-sm">฿{product.price.toLocaleString()}</td>
+                          <td className="p-4 text-center">
+                             <span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border ${product.stock < 10 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
+                               {product.stock}
+                             </span>
+                          </td>
+                          <td className="p-4 text-center">
+                            <div className="flex justify-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button onClick={() => handleEdit(product)} className="text-blue-600 hover:bg-blue-100 p-2 rounded-lg transition-all" title="แก้ไข"><Edit size={16} /></button>
+                              <button onClick={() => handleDelete(product.id)} className="text-red-500 hover:bg-red-100 p-2 rounded-lg transition-all" title="ลบ"><Trash2 size={16} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
 
-                   <div className="bg-[#001f3f] rounded-[3rem] p-10 text-white shadow-2xl relative overflow-hidden">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-                      <h4 className="text-[11px] font-black text-blue-400 uppercase tracking-[0.5em] mb-6 relative z-10">Data Integrity System</h4>
-                      <p className="text-blue-100/60 text-xs leading-relaxed mb-8 relative z-10 font-medium">ทุกการเปลี่ยนแปลงจะถูกบันทึกเข้าสู่ Global Core Registry โดยอัตโนมัติ กรุณาตรวจสอบ Query ก่อนทำการ Execute</p>
-                      <button className="w-full bg-white/10 hover:bg-white/20 border border-white/10 text-white rounded-[2rem] py-5 text-[10px] font-black uppercase tracking-[0.4em] transition-all relative z-10 active:scale-95 flex items-center justify-center gap-3">
-                        <RotateCcw size={16} /> Re-Sync Matrix
-                      </button>
-                   </div>
-                </div>
-             </div>
-          </div>
-        )}
-
-        {/* Global Confirmation Modal */}
-        {(deleteConfirmId || bulkDeleteConfirm) && (
-          <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-xl z-[100] flex items-center justify-center p-6 animate-in fade-in duration-300">
-             <div className="bg-white p-16 rounded-[5rem] text-center max-w-md border border-white/20 shadow-2xl animate-in zoom-in duration-500">
-                <div className="w-24 h-24 bg-red-50 text-red-500 rounded-[2.5rem] flex items-center justify-center mx-auto mb-10 shadow-inner">
-                  <ShieldAlert size={56} strokeWidth={1.5} />
-                </div>
-                <h3 className="text-4xl font-black mb-4 tracking-tighter uppercase leading-none text-slate-900">Purge Request</h3>
-                <p className="text-slate-500 text-sm mb-12 font-bold leading-relaxed uppercase tracking-widest">
-                  {bulkDeleteConfirm 
-                    ? `Permanent removal of ${bulkDeleteConfirm === 'products' ? selectedProductIds.length : selectedCategoryIds.length} registry clusters in progress.` 
-                    : 'A single SKU record is about to be terminated from the global matrix.'
-                  }
-                </p>
-                <div className="flex gap-4">
+              {/* Pagination UI */}
+              <div className="mt-6 flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
+                <span className="text-xs text-gray-400">แสดง {indexOfFirstItem + 1} ถึง {Math.min(indexOfLastItem, processedProducts.length)} จากทั้งหมด {processedProducts.length} รายการ</span>
+                <div className="flex gap-2">
                    <button 
-                    onClick={() => { setDeleteConfirmId(null); setBulkDeleteConfirm(null); }} 
-                    className="flex-1 px-10 py-6 bg-slate-100 rounded-[2.5rem] font-black text-[11px] uppercase tracking-[0.4em] text-slate-600 hover:bg-slate-200 transition-all"
+                    disabled={productPage === 1}
+                    onClick={() => setProductPage(productPage - 1)}
+                    className="p-2 border rounded-xl disabled:opacity-30 hover:bg-gray-50 transition-colors"
                    >
-                    Abort
+                     <ChevronLeft size={16} />
                    </button>
+                   {Array.from({length: totalPages}, (_, i) => i + 1).map(page => (
+                     <button 
+                      key={page}
+                      onClick={() => setProductPage(page)}
+                      className={`w-8 h-8 rounded-xl text-xs font-bold transition-all ${productPage === page ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'hover:bg-gray-50 border'}`}
+                     >
+                       {page}
+                     </button>
+                   ))}
                    <button 
-                    onClick={bulkDeleteConfirm ? handleBulkDelete : confirmDelete} 
-                    className="flex-1 px-10 py-6 bg-red-600 text-white rounded-[2.5rem] font-black text-[11px] uppercase tracking-[0.4em] shadow-2xl shadow-red-500/40 active:scale-95 hover:bg-red-700 transition-all"
+                    disabled={productPage === totalPages}
+                    onClick={() => setProductPage(productPage + 1)}
+                    className="p-2 border rounded-xl disabled:opacity-30 hover:bg-gray-50 transition-colors"
                    >
-                    Terminate
+                     <ChevronRight size={16} />
                    </button>
                 </div>
-             </div>
-          </div>
-        )}
+              </div>
+            </div>
 
-        {/* Modular Product Registry Modal */}
-        {isModalOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xl flex items-center justify-center z-[60] p-10 overflow-y-auto no-scrollbar">
-             <div className="bg-white rounded-[5rem] shadow-2xl w-full max-w-7xl mx-auto overflow-hidden animate-in zoom-in duration-500 flex flex-col max-h-[90vh] border border-white/20">
-                <header className="bg-[#001f3f] p-12 text-white flex justify-between items-center relative overflow-hidden shrink-0">
-                   <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-transparent"></div>
-                   <div className="flex items-center gap-8 relative z-10">
-                     <div className="p-5 bg-white/10 rounded-[2.5rem] backdrop-blur-md border border-white/10 shadow-2xl"><Package size={42} /></div>
-                     <div>
-                      <h2 className="text-4xl font-black tracking-tighter uppercase leading-none">{editingProduct ? 'Modify Registry' : 'Initialize Matrix'}</h2>
-                      <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.5em] mt-4 opacity-70">Core Logic Version 4.0.2</p>
-                     </div>
-                   </div>
-                   <button onClick={() => setIsModalOpen(false)} className="hover:bg-white/10 p-5 rounded-full transition-all relative z-10 border border-white/10 group"><X size={42} className="group-hover:rotate-90 transition-transform" /></button>
-                </header>
-
-                <form onSubmit={handleSubmit} className="p-16 overflow-y-auto no-scrollbar bg-slate-50 flex-1">
-                   <div className="grid grid-cols-1 lg:grid-cols-3 gap-16">
-                      <div className="space-y-12">
-                         <section>
-                            <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-[0.5em] mb-8 flex items-center gap-3">
-                               <Info size={16} /> Data Fundamentals
-                            </h4>
-                            <div className="space-y-8">
-                               <div>
-                                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Global Descriptor</label>
-                                  <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-8 py-5 text-sm font-black text-slate-900 outline-none focus:ring-8 focus:ring-blue-500/5 transition-all shadow-sm" required />
-                               </div>
-                               <div className="grid grid-cols-2 gap-6">
-                                  <div>
-                                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Brand OEM</label>
-                                     <input type="text" value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-6 py-5 text-sm font-bold outline-none" />
-                                  </div>
-                                  <div>
-                                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Registry SKU</label>
-                                     <input type="text" value={formData.sku} onChange={e => setFormData({...formData, sku: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-6 py-5 text-xs font-mono font-black outline-none" required />
-                                  </div>
-                               </div>
-                               <div className="grid grid-cols-2 gap-6">
-                                  <div>
-                                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Cluster Node</label>
-                                     <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-6 py-5 text-xs font-black uppercase tracking-widest outline-none shadow-sm">
-                                       {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                                     </select>
-                                  </div>
-                                  <div>
-                                     <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Base Price (฿)</label>
-                                     <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: Number(e.target.value)})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-6 py-5 text-sm font-black text-blue-600 outline-none" required />
-                                  </div>
-                               </div>
-                               <div>
-                                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Visual Asset Source (URL)</label>
-                                  <input type="text" value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-8 py-5 text-[10px] font-mono outline-none" />
-                               </div>
-                            </div>
-                         </section>
-
-                         <section>
-                            <h4 className="text-[11px] font-black text-amber-600 uppercase tracking-[0.5em] mb-8 flex items-center gap-3">
-                               <Truck size={16} /> Physical Logistics
-                            </h4>
-                            <div className="bg-amber-50/50 p-10 rounded-[3rem] border border-amber-100/50 space-y-8">
-                                <div className="grid grid-cols-2 gap-6">
-                                    <div>
-                                        <label className="block text-[9px] font-black text-amber-700/50 uppercase mb-3 tracking-widest">Weight (kg)</label>
-                                        <input type="number" value={formData.weight} onChange={e => setFormData({...formData, weight: Number(e.target.value)})} className="w-full bg-white border border-amber-100 rounded-[1.5rem] px-6 py-4 text-xs font-black outline-none" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[9px] font-black text-amber-700/50 uppercase mb-3 tracking-widest">Volume Specs</label>
-                                        <input type="text" placeholder="W x H x D" value={formData.dimensions} onChange={e => setFormData({...formData, dimensions: e.target.value})} className="w-full bg-white border border-amber-100 rounded-[1.5rem] px-6 py-4 text-xs font-black outline-none" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="flex items-center justify-between bg-white px-6 py-4 rounded-[1.5rem] border border-amber-100">
-                                        <span className="text-[10px] font-black text-amber-600 uppercase tracking-widest">Prominent Placement</span>
-                                        <button type="button" onClick={() => setFormData({...formData, isFeatured: !formData.isFeatured})} className={`w-14 h-8 rounded-full transition-all relative ${formData.isFeatured ? 'bg-amber-500 shadow-lg shadow-amber-500/20' : 'bg-slate-200'}`}>
-                                            <div className={`absolute top-1.5 w-5 h-5 bg-white rounded-full transition-all shadow-md ${formData.isFeatured ? 'left-8' : 'left-1.5'}`} />
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                         </section>
+            {/* Sticky Bulk Action Bar */}
+            {selectedIds.length > 0 && (
+              <div className="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 animate-in slide-in-from-bottom-10 fade-in duration-300">
+                <div className="bg-[#1a237e] text-white px-6 py-4 rounded-3xl shadow-2xl flex items-center gap-8 border border-white/10 backdrop-blur-md">
+                   <div className="flex items-center gap-3 pr-6 border-r border-white/20">
+                      <div className="bg-orange-500 text-white text-xs font-bold px-3 py-1 rounded-full shadow-inner animate-pulse">
+                        {selectedIds.length}
                       </div>
-
-                      <div className="lg:col-span-2 space-y-12">
-                         <section className="bg-white rounded-[4rem] p-12 border border-slate-200 shadow-sm flex flex-col min-h-[500px]">
-                            <div className="flex justify-between items-center mb-10">
-                                <h4 className="text-[11px] font-black text-blue-600 uppercase tracking-[0.5em] flex items-center gap-3">
-                                   <Layers size={20} /> Matrix Variant Controller
-                                </h4>
-                                <button type="button" onClick={() => { const newV: ProductVariant = { id: `v-${Date.now()}`, name: '', sku: `${formData.sku || 'SKU'}-${(formData.variants?.length || 0) + 1}`, price: formData.price || 0, stock: 0 }; setFormData(prev => ({ ...prev, variants: [...(prev.variants || []), newV] })); }} className="bg-blue-600 text-white px-8 py-4 rounded-[1.5rem] font-black text-[10px] uppercase tracking-[0.2em] flex items-center gap-3 shadow-xl hover:scale-105 transition-all">
-                                   <Plus size={16} strokeWidth={3} /> Initialize Variant
-                                </button>
-                            </div>
-                            
-                            <div className="flex-1 space-y-6">
-                               {formData.variants && formData.variants.length > 0 ? (
-                                  formData.variants.map((v) => (
-                                    <div key={v.id} className="bg-slate-50/50 rounded-[2.5rem] p-8 border border-slate-100 relative group animate-in slide-in-from-bottom-4">
-                                        <button type="button" onClick={() => setFormData(prev => ({ ...prev, variants: prev.variants?.filter(x => x.id !== v.id) }))} className="absolute -top-3 -right-3 bg-red-500 text-white rounded-2xl p-3 opacity-0 group-hover:opacity-100 transition-all shadow-xl hover:scale-110"><Trash2 size={20} /></button>
-                                        <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
-                                            <div>
-                                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 tracking-widest">Descriptor</label>
-                                              <input type="text" value={v.name} placeholder="Finish..." onChange={e => updateVariant(v.id, 'name', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-5 py-4 text-xs font-black outline-none" />
-                                            </div>
-                                            <div>
-                                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 tracking-widest">SKU Instance</label>
-                                              <input type="text" value={v.sku} onChange={e => updateVariant(v.id, 'sku', e.target.value)} className="w-full bg-white border border-slate-200 rounded-xl px-5 py-4 text-xs font-mono font-black outline-none" />
-                                            </div>
-                                            <div>
-                                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 tracking-widest">MSRP (฿)</label>
-                                              <input type="number" value={v.price} onChange={e => updateVariant(v.id, 'price', Number(e.target.value))} className="w-full bg-white border border-slate-200 rounded-xl px-5 py-4 text-xs font-black text-blue-600 outline-none" />
-                                            </div>
-                                            <div>
-                                              <label className="block text-[9px] font-black text-slate-400 uppercase mb-3 tracking-widest">Stock</label>
-                                              <input type="number" value={v.stock} onChange={e => updateVariant(v.id, 'stock', Number(e.target.value))} className="w-full bg-white border border-slate-200 rounded-xl px-5 py-4 text-xs font-black outline-none" />
-                                            </div>
-                                        </div>
-                                    </div>
-                                  ))
-                               ) : (
-                                  <div className="h-full flex flex-col items-center justify-center py-20 bg-slate-50/50 rounded-[3rem] border border-dashed border-slate-200">
-                                      <Layers size={64} className="text-slate-200 mb-6" />
-                                      <p className="font-black text-[10px] uppercase tracking-[0.4em] text-slate-300">Standalone Matrix Instance</p>
-                                  </div>
-                                )}
-                            </div>
-                         </section>
-
-                         <section>
-                            <div className="flex justify-between items-end mb-8">
-                                <h4 className="text-[11px] font-black text-emerald-600 uppercase tracking-[0.5em] flex items-center gap-3">
-                                   <Globe size={20} /> SEO Engine
-                                </h4>
-                                <button type="button" onClick={generateSEO} className="bg-emerald-600 text-white px-8 py-3.5 rounded-[1.5rem] text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3 shadow-lg hover:scale-105 transition-all">
-                                   <Wand2 size={16} /> Re-Calculate Metadata
-                                </button>
-                            </div>
-                            <div className="bg-emerald-50/50 p-12 rounded-[4rem] border border-emerald-100/50 grid grid-cols-1 md:grid-cols-2 gap-12">
-                                <div className="space-y-8">
-                                    <div>
-                                        <label className="block text-[9px] font-black text-emerald-600 uppercase mb-3 tracking-widest">Optimized URL ID</label>
-                                        <input type="text" value={formData.seoUrl} onChange={e => setFormData({...formData, seoUrl: e.target.value})} className="w-full bg-white border border-emerald-100 rounded-[1.5rem] px-6 py-4 text-xs font-mono outline-none" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-[9px] font-black text-emerald-600 uppercase mb-3 tracking-widest">Search Keywords</label>
-                                        <div className="flex flex-wrap gap-2 pt-2">
-                                            {formData.seoKeywords?.map(k => (
-                                                <span key={k} className="bg-emerald-600 text-white px-4 py-2 rounded-xl text-[8px] font-black uppercase tracking-widest">{k}</span>
-                                            ))}
-                                            <input type="text" placeholder="+ Keyword" value={seoKeywordInput} onChange={e => setSeoKeywordInput(e.target.value)} onKeyDown={e => { if(e.key === 'Enter') { e.preventDefault(); if(seoKeywordInput.trim()) setFormData(prev => ({...prev, seoKeywords: [...(prev.seoKeywords || []), seoKeywordInput.trim()]})); setSeoKeywordInput(''); } }} className="bg-transparent border-none text-[9px] font-black outline-none placeholder:text-emerald-300/50 min-w-[80px]" />
-                                        </div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="block text-[9px] font-black text-emerald-600 uppercase mb-3 tracking-widest">Description Snapshot</label>
-                                    <textarea value={formData.seoDescription} onChange={e => setFormData({...formData, seoDescription: e.target.value})} maxLength={160} className="w-full bg-white border border-emerald-100 rounded-[2rem] p-6 text-[10px] leading-relaxed font-bold text-slate-600 h-32 resize-none outline-none shadow-inner" placeholder="Metadata snippet..." />
-                                </div>
-                            </div>
-                         </section>
-                      </div>
-                   </div>
-
-                   <div className="mt-20 pt-12 border-t border-slate-200 flex justify-end items-center gap-10">
-                      <button type="button" onClick={() => setIsModalOpen(false)} className="font-black text-[11px] uppercase tracking-[0.5em] text-slate-400 hover:text-slate-900 transition-colors">Discard Sequence</button>
-                      <button type="submit" className="bg-[#001f3f] text-white px-20 py-8 rounded-[3rem] font-black text-[12px] uppercase tracking-[0.5em] shadow-2xl shadow-blue-900/40 hover:-translate-y-2 transition-all flex items-center gap-4 border border-white/10 active:scale-95">
-                         <Save size={24} strokeWidth={3} /> Commit to Registry Matrix
-                      </button>
-                   </div>
-                </form>
-             </div>
-          </div>
-        )}
-
-        {/* Category Creation Modal */}
-        {isCategoryModalOpen && (
-          <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-2xl flex items-center justify-center z-[60] p-10 overflow-y-auto no-scrollbar">
-             <div className="bg-white rounded-[5rem] shadow-2xl w-full max-w-2xl mx-auto overflow-hidden animate-in zoom-in duration-500 flex flex-col border border-white/20">
-                <header className="bg-[#001f3f] p-10 text-white flex justify-between items-center relative overflow-hidden shrink-0">
-                   <div className="absolute inset-0 bg-gradient-to-r from-blue-600/10 to-transparent"></div>
-                   <div className="flex items-center gap-6 relative z-10">
-                     <div className="p-4 bg-white/10 rounded-[2rem] backdrop-blur-md border border-white/10 shadow-2xl"><List size={32} /></div>
-                     <div>
-                      <h2 className="text-3xl font-black tracking-tighter uppercase leading-none">{editingCategory ? 'Update Cluster' : 'Define New Cluster'}</h2>
-                      <p className="text-[10px] text-blue-400 font-black uppercase tracking-[0.5em] mt-3 opacity-70">Taxonomy Hub v2.0</p>
-                     </div>
-                   </div>
-                   <button onClick={() => { setIsCategoryModalOpen(false); setEditingCategory(null); }} className="hover:bg-white/10 p-4 rounded-full transition-all relative z-10 border border-white/10 group"><X size={32} /></button>
-                </header>
-                
-                <div className="p-12 bg-slate-50">
-                   <div className="space-y-8">
-                      <div>
-                          <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Cluster Name</label>
-                          <input type="text" value={categoryFormData.name} onChange={e => setCategoryFormData({...categoryFormData, name: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-8 py-5 text-sm font-black text-slate-900 outline-none focus:ring-8 focus:ring-blue-500/5 transition-all shadow-sm" placeholder="e.g. Premium Filtration" />
-                      </div>
-                      <div>
-                          <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-2 tracking-widest">Iconography Asset (URL)</label>
-                          <input type="text" value={categoryFormData.icon} onChange={e => setCategoryFormData({...categoryFormData, icon: e.target.value})} className="w-full bg-white border border-slate-200 rounded-[2rem] px-8 py-5 text-[10px] font-mono outline-none shadow-sm" placeholder="https://images.unsplash.com/..." />
-                      </div>
-                      <div className="flex items-center justify-between bg-white px-8 py-5 rounded-[2rem] border border-slate-200 shadow-sm">
-                          <div className="flex items-center gap-3">
-                             {categoryFormData.isActive ? <CheckCircle2 className="text-emerald-500" size={20} /> : <EyeOff className="text-slate-300" size={20} />}
-                             <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">Discovery Status: Active</span>
-                          </div>
-                          <button type="button" onClick={() => setCategoryFormData({...categoryFormData, isActive: !categoryFormData.isActive})} className={`w-14 h-8 rounded-full transition-all relative ${categoryFormData.isActive ? 'bg-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-slate-200'}`}>
-                              <div className={`absolute top-1.5 w-5 h-5 bg-white rounded-full transition-all shadow-md ${categoryFormData.isActive ? 'left-8' : 'left-1.5'}`} />
-                          </button>
-                      </div>
+                      <span className="text-sm font-medium tracking-wide">รายการที่ถูกเลือก</span>
                    </div>
                    
-                   <div className="mt-12 pt-8 border-t border-slate-200 flex justify-end items-center gap-8">
-                      <button type="button" onClick={() => { setIsCategoryModalOpen(false); setEditingCategory(null); }} className="font-black text-[10px] uppercase tracking-[0.4em] text-slate-400 hover:text-slate-900 transition-colors">Abort</button>
+                   <div className="flex items-center gap-4">
                       <button 
-                        onClick={() => {
-                          if (editingCategory) db.updateCategory({ ...editingCategory, ...categoryFormData } as Category);
-                          else db.addCategory(categoryFormData);
-                          setIsCategoryModalOpen(false);
-                          setEditingCategory(null);
-                          setCategoryFormData({ name: '', icon: '', isActive: true });
-                          refreshData();
-                        }}
-                        className="bg-[#001f3f] text-white px-12 py-6 rounded-[2.5rem] font-black text-[10px] uppercase tracking-[0.4em] shadow-2xl shadow-blue-900/40 hover:-translate-y-1 transition-all flex items-center gap-4 border border-white/10"
+                        onClick={handleBulkDelete}
+                        className="flex items-center gap-2 bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-lg active:scale-95"
                       >
-                         <Save size={18} /> {editingCategory ? 'Commit Cluster' : 'Publish Cluster'}
+                        <Trash2 size={16} /> ลบที่เลือก
+                      </button>
+                      
+                      <button 
+                        onClick={() => setSelectedIds([])}
+                        className="flex items-center gap-2 hover:bg-white/10 text-gray-300 hover:text-white px-4 py-2 rounded-xl text-xs font-medium transition-all"
+                      >
+                        <X size={16} /> ยกเลิกทั้งหมด
                       </button>
                    </div>
                 </div>
-             </div>
-          </div>
+              </div>
+            )}
+          </>
         )}
       </main>
+
+      {/* Edit/Add Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-[100] backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[95vh] border border-white/20 animate-in fade-in zoom-in-95 duration-200">
+             <div className="bg-[#1a237e] px-8 py-5 border-b border-white/10 flex justify-between items-center text-white">
+                <div className="flex items-center gap-3">
+                  <div className="bg-white/20 p-2 rounded-xl">
+                    {editingProduct ? <Edit size={22} /> : <Plus size={22} />}
+                  </div>
+                  <h3 className="font-bold text-lg tracking-wide">{editingProduct ? 'แก้ไขข้อมูลสินค้า' : 'เพิ่มสินค้าใหม่ลงระบบ'}</h3>
+                </div>
+                <button onClick={() => setIsModalOpen(false)} className="bg-white/10 hover:bg-white/20 p-2 rounded-full transition-all duration-200">
+                  <X size={20} />
+                </button>
+             </div>
+             
+             <form onSubmit={handleSubmit} className="p-8 space-y-8 overflow-y-auto no-scrollbar">
+                {/* Basic Info Section */}
+                <div className="space-y-6">
+                  <div className="flex items-center gap-2 border-l-4 border-blue-600 pl-3">
+                    <Package size={18} className="text-blue-600" />
+                    <h4 className="font-bold text-gray-800 uppercase tracking-wider text-sm">ข้อมูลทั่วไป</h4>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="md:col-span-2">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-2 ml-1">ชื่อสินค้าที่แสดง</label>
+                      <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full border-gray-200 border rounded-xl p-3 focus:ring-2 focus:ring-blue-500 outline-none transition shadow-sm" placeholder="ระบุชื่อสินค้า..." required />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-2 ml-1">
+                        {hasVariants ? 'ราคาขายหลัก (คำนวณจากตัวเลือกต่ำสุด)' : 'ราคาขาย (บาท)'}
+                      </label>
+                      <input 
+                        type="number" 
+                        value={formData.price} 
+                        readOnly={hasVariants}
+                        onChange={e => !hasVariants && setFormData({...formData, price: Number(e.target.value)})} 
+                        className={`w-full border rounded-xl p-3 outline-none transition shadow-sm ${hasVariants ? 'bg-blue-50 border-blue-200 text-blue-700 font-bold cursor-not-allowed' : 'border-gray-200 focus:ring-2 focus:ring-blue-500'}`} 
+                        required 
+                      />
+                      {hasVariants && <p className="text-[10px] text-blue-600 mt-2 italic flex items-center gap-1 font-medium bg-blue-50/50 p-2 rounded-lg border border-blue-100/50"><AlertCircle size={12}/> ระบบอัปเดตราคาเริ่มต้นอัตโนมัติจากตัวเลือกที่ราคาต่ำสุด</p>}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-2 ml-1">สต็อกรวมในระบบ</label>
+                      <input type="number" value={formData.stock} readOnly={hasVariants} onChange={e => !hasVariants && setFormData({...formData, stock: Number(e.target.value)})} className={`w-full border rounded-xl p-3 outline-none transition shadow-sm ${hasVariants ? 'bg-gray-50 border-gray-100 text-gray-500 cursor-not-allowed' : 'border-gray-200 focus:ring-2 focus:ring-blue-500'}`} required />
+                      {hasVariants && <p className="text-[10px] text-gray-400 mt-2 italic font-medium">รวมจากจำนวนตัวเลือกทุกรายการ</p>}
+                    </div>
+
+                    <div className="md:col-span-1">
+                       <label className="block text-xs font-bold text-gray-500 uppercase mb-2 ml-1">หมวดหมู่สินค้า</label>
+                       <select value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})} className="w-full border-gray-200 border rounded-xl p-3 bg-white focus:ring-2 focus:ring-blue-500 outline-none transition shadow-sm cursor-pointer">
+                         {CATEGORIES.map(category => (<option key={category.id} value={category.name}>{category.name}</option>))}
+                       </select>
+                    </div>
+
+                    <div className="md:col-span-1">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-2 ml-1">URL รูปภาพหลัก</label>
+                      <input type="text" value={formData.image} onChange={e => setFormData({...formData, image: e.target.value})} className="w-full border-gray-200 border rounded-xl p-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition shadow-sm" placeholder="https://..." />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Variants Section */}
+                <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 space-y-6">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex items-center gap-2 border-l-4 border-purple-600 pl-3">
+                      <Layers size={18} className="text-purple-600" />
+                      <h4 className="font-bold text-gray-800 uppercase tracking-wider text-sm">การตั้งค่าตัวเลือกสินค้า (Variants)</h4>
+                    </div>
+                    <button type="button" onClick={handleAddVariant} className="text-xs bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 transition-all duration-200 flex items-center gap-1.5 shadow-md font-bold">
+                      <Plus size={14} /> เพิ่มตัวเลือกสินค้า
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                    {(formData.variants || []).length === 0 ? (
+                      <div className="text-center py-10 text-gray-400 text-xs italic bg-white border border-dashed rounded-2xl flex flex-col items-center gap-2">
+                        <Layers size={32} className="text-gray-200" />
+                        สินค้าชิ้นนี้ยังไม่มีตัวเลือกย่อย (เช่น สี หรือ ขนาด)
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-4">
+                        {(formData.variants || []).map((variant) => (
+                          <div key={variant.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm relative group hover:border-purple-300 transition-all duration-300">
+                            <button 
+                              type="button" 
+                              onClick={() => handleRemoveVariant(variant.id)} 
+                              className="absolute -top-3 -right-3 bg-red-100 text-red-600 hover:bg-red-600 hover:text-white p-1.5 rounded-full shadow-lg transition-all duration-300 z-10 opacity-0 group-hover:opacity-100"
+                              title="ลบตัวเลือกนี้"
+                            >
+                              <X size={14} />
+                            </button>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+                              <div className="md:col-span-4">
+                                <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-tighter">ชื่อตัวเลือก (เช่น สีแดง, XL)</label>
+                                <div className="relative">
+                                  <input 
+                                    type="text" 
+                                    value={variant.name} 
+                                    onChange={(e) => handleUpdateVariant(variant.id, 'name', e.target.value)} 
+                                    className={`w-full text-sm border rounded-lg px-3 py-2 outline-none transition shadow-sm ${variantErrors[variant.id] ? 'border-red-500 ring-2 ring-red-50 bg-red-50' : 'border-gray-200 focus:ring-2 focus:ring-purple-500'}`} 
+                                    placeholder="ใส่ชื่อตัวเลือก..."
+                                    required
+                                  />
+                                  {variantErrors[variant.id] && (
+                                    <p className="text-[9px] text-red-600 mt-1.5 flex items-center gap-1 font-bold italic animate-pulse">
+                                      <AlertCircle size={10} /> {variantErrors[variant.id]}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="md:col-span-3">
+                                <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-tighter">ราคา (บาท)</label>
+                                <input 
+                                  type="number" 
+                                  value={variant.price} 
+                                  onChange={(e) => handleUpdateVariant(variant.id, 'price', Number(e.target.value))} 
+                                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none transition shadow-sm" 
+                                  placeholder="0"
+                                  required
+                                />
+                              </div>
+
+                              <div className="md:col-span-3">
+                                <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-tighter">สต็อก</label>
+                                <input 
+                                  type="number" 
+                                  value={variant.stock} 
+                                  onChange={(e) => handleUpdateVariant(variant.id, 'stock', Number(e.target.value))} 
+                                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none transition shadow-sm" 
+                                  placeholder="0"
+                                  required
+                                />
+                              </div>
+
+                              <div className="md:col-span-2 flex flex-col items-center justify-end h-full">
+                                 <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-tighter text-center">Preview</label>
+                                 <div className="w-12 h-12 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-300 bg-gray-50 overflow-hidden shadow-inner group-hover:border-purple-200 group-hover:bg-purple-50 transition-colors">
+                                    {variant.image ? (
+                                      <img src={variant.image} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-125" alt="v-preview" />
+                                    ) : (
+                                      <ImageIcon size={18} />
+                                    )}
+                                 </div>
+                              </div>
+
+                              <div className="md:col-span-12 pt-2 border-t border-gray-50 mt-1">
+                                 <div className="flex items-center gap-2 mb-1.5">
+                                   <ImageIcon size={12} className="text-gray-400" />
+                                   <label className="block text-[9px] font-bold text-gray-400 uppercase tracking-tighter">URL รูปภาพเฉพาะตัวเลือก (ถ้ามี)</label>
+                                 </div>
+                                 <input 
+                                  type="text" 
+                                  value={variant.image || ''} 
+                                  onChange={(e) => handleUpdateVariant(variant.id, 'image', e.target.value)} 
+                                  className="w-full text-[10px] border border-gray-100 bg-gray-50/50 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none transition" 
+                                  placeholder="ตัวอย่าง: https://image-server.com/blue-model.jpg"
+                                />
+                                <p className="text-[9px] text-gray-400 mt-1.5 italic font-medium">รูปภาพนี้จะแสดงแทนรูปหลักเมื่อลูกค้าคลิกเลือกตัวเลือกนี้ในหน้าร้าน</p>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Status and Visibility Toggles */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div 
+                      className={`flex items-center gap-4 py-5 px-6 rounded-2xl border-2 transition-all duration-300 cursor-pointer ${formData.isFlashSale ? 'bg-orange-50 border-orange-300 ring-4 ring-orange-100 shadow-md scale-[1.02]' : 'bg-white border-gray-100 hover:border-gray-200'}`} 
+                      onClick={() => setFormData({...formData, isFlashSale: !formData.isFlashSale})}
+                    >
+                        <div className={`w-14 h-7 rounded-full relative transition-colors ${formData.isFlashSale ? 'bg-orange-500' : 'bg-gray-200'}`}>
+                            <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${formData.isFlashSale ? 'left-8' : 'left-1'}`}></div>
+                        </div>
+                        <div className="flex flex-col">
+                          <label className="text-sm font-black text-gray-700 flex items-center gap-2 select-none cursor-pointer uppercase tracking-tight">
+                            <Zap size={18} className={formData.isFlashSale ? 'fill-orange-500 text-orange-500' : 'text-gray-400'} /> ติดป้าย Flash Sale
+                          </label>
+                          <span className="text-[10px] text-gray-500 font-semibold">สินค้าจะปรากฏในโซนดีลพิเศษ</span>
+                        </div>
+                    </div>
+
+                    <div 
+                      className={`flex items-center gap-4 py-5 px-6 rounded-2xl border-2 transition-all duration-300 cursor-pointer ${formData.isFeatured ? 'bg-yellow-50 border-yellow-300 ring-4 ring-yellow-100 shadow-md scale-[1.02]' : 'bg-white border-gray-100 hover:border-gray-200'}`} 
+                      onClick={() => setFormData({...formData, isFeatured: !formData.isFeatured})}
+                    >
+                        <div className={`w-14 h-7 rounded-full relative transition-colors ${formData.isFeatured ? 'bg-yellow-400' : 'bg-gray-200'}`}>
+                            <div className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow-md transition-all duration-300 ${formData.isFeatured ? 'left-8' : 'left-1'}`}></div>
+                        </div>
+                        <div className="flex flex-col">
+                          <label className="text-sm font-black text-gray-700 flex items-center gap-2 select-none cursor-pointer uppercase tracking-tight">
+                            <Star size={18} className={formData.isFeatured ? 'fill-yellow-500 text-yellow-500' : 'text-gray-400'} /> สินค้าแนะนำพิเศษ
+                          </label>
+                          <span className="text-[10px] text-gray-500 font-semibold">จะแสดงในส่วน Product Hero บนหน้าหลัก</span>
+                        </div>
+                    </div>
+                </div>
+                
+                {/* Submit / Cancel Buttons */}
+                <div className="pt-8 flex justify-end gap-4 border-t border-gray-100 mt-6 flex-shrink-0">
+                   <button type="button" onClick={() => setIsModalOpen(false)} className="px-8 py-3 text-gray-500 hover:text-gray-800 hover:bg-gray-100 rounded-xl font-bold transition-all duration-200">
+                     ยกเลิก
+                   </button>
+                   <button 
+                    type="submit" 
+                    disabled={Object.values(variantErrors).some(err => err !== '')}
+                    className="px-10 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-xl hover:shadow-blue-200 transition-all duration-200 font-bold active:scale-[0.98]"
+                   >
+                     <Save size={20} /> บันทึกข้อมูลสินค้า
+                   </button>
+                </div>
+             </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

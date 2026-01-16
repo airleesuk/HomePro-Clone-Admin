@@ -2,16 +2,14 @@
 export interface ProductVariant {
   id: string;
   name: string;
-  sku: string;
   price: number;
   stock: number;
+  image?: string;
 }
 
 export interface Product {
   id: number;
   name: string;
-  brand?: string;
-  sku?: string;
   price: number;
   originalPrice?: number;
   image: string;
@@ -21,29 +19,36 @@ export interface Product {
   discount?: number;
   isFlashSale?: boolean;
   isFeatured?: boolean;
-  tags?: string[];
   rating?: number;
-  description?: string;
-  weight?: number;
-  dimensions?: string;
   variants?: ProductVariant[];
-  // SEO Fields
-  seoUrl?: string;
-  seoKeywords?: string[];
-  seoDescription?: string;
 }
 
 export interface Category {
   id: number;
   name: string;
-  icon: string;
-  isActive?: boolean;
+  icon: string; // URL for image
+  iconKey?: string; // Key for Lucide icon lookup
 }
 
 export interface Banner {
   id: number;
   image: string;
   alt: string;
+}
+
+export interface SubCategory {
+  title: string;
+  items: string[];
+}
+
+export interface CategoryDetail {
+  id: number;
+  name: string;
+  iconKey: string;
+  highlights: { title: string; img: string }[];
+  subCategories: SubCategory[];
+  promoText: string;
+  promoImg: string;
 }
 
 export enum ViewMode {

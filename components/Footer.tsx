@@ -6,12 +6,12 @@ export const Footer: React.FC = () => {
        <div className="container mx-auto px-4">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
              <div>
-                <h3 className="text-white font-bold mb-4">เกี่ยวกับ WAREE-TH</h3>
+                <h3 className="text-white font-bold mb-4">เกี่ยวกับโฮมโปร</h3>
                 <ul className="space-y-2 text-sm">
                    <li>เกี่ยวกับเรา</li>
                    <li>ติดต่อเรา</li>
                    <li>สมัครงาน</li>
-                   <li>สาขา WAREE-TH</li>
+                   <li>สาขาโฮมโปร</li>
                 </ul>
              </div>
              <div>
@@ -52,7 +52,7 @@ export const Footer: React.FC = () => {
              </div>
           </div>
           <div className="border-t border-gray-700 mt-8 pt-6 text-center text-xs">
-             <p>&copy; {new Date().getFullYear()} WAREE-TH. All rights reserved.</p>
+             <p>&copy; {new Date().getFullYear()} Home Product Center Public Company Limited. All rights reserved.</p>
           </div>
        </div>
     </footer>

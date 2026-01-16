@@ -1,28 +1,39 @@
-
 <!DOCTYPE html>
 <html lang="th">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>WAREE-TH | Home Architecture & Registry</title>
+    <title>HomePro Clone</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@200;300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <style>
-      :root {
-        --color-primary: #001f3f;
-        --color-accent: #0056b3;
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            keyframes: {
+              swing: {
+                '0%, 100%': { transform: 'rotate(0deg)' },
+                '20%': { transform: 'rotate(15deg)' },
+                '40%': { transform: 'rotate(-10deg)' },
+                '60%': { transform: 'rotate(5deg)' },
+                '80%': { transform: 'rotate(-5deg)' },
+              },
+              wiggle: {
+                '0%, 100%': { transform: 'rotate(-3deg)' },
+                '50%': { transform: 'rotate(3deg)' },
+              }
+            },
+            animation: {
+              swing: 'swing 1s ease-in-out infinite',
+              wiggle: 'wiggle 0.3s ease-in-out infinite',
+            }
+          }
+        }
       }
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
       body {
         font-family: 'Kanit', sans-serif;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
-      }
-      /* Soft-Layer Shadow System */
-      .shadow-soft {
-        box-shadow: 0 10px 40px -10px rgba(0,0,0,0.05);
-      }
-      .shadow-2xl {
-        box-shadow: 0 25px 60px -15px rgba(0, 31, 63, 0.12);
       }
       /* Hide scrollbar for Chrome, Safari and Opera */
       .no-scrollbar::-webkit-scrollbar {
@@ -33,10 +44,6 @@
           -ms-overflow-style: none;  /* IE and Edge */
           scrollbar-width: none;  /* Firefox */
       }
-      /* Premium Smooth Scroll */
-      html {
-        scroll-behavior: smooth;
-      }
     </style>
   <script type="importmap">
 {
@@ -44,12 +51,13 @@
     "react/": "https://esm.sh/react@^19.2.3/",
     "react": "https://esm.sh/react@^19.2.3",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0"
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.35.0"
   }
 }
 </script>
 </head>
-  <body class="bg-[#f8fafc] text-slate-800">
+  <body class="bg-gray-50 text-gray-800">
     <div id="root"></div>
   </body>
 </html>

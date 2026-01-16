@@ -1,180 +1,318 @@
-
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Header } from '../components/Header';
 import { Hero } from '../components/Hero';
 import { FlashSale } from '../components/FlashSale';
 import { CategorySection } from '../components/CategorySection';
 import { Footer } from '../components/Footer';
+import { AiAssistant } from '../components/AiAssistant';
 import { db } from '../services/mockDb';
-import { Product } from '../types';
-import { Star, ShoppingCart, ShieldCheck, PenTool, Layout, Hammer } from 'lucide-react';
+import { Product, ProductVariant } from '../types';
+import { Star, ShoppingCart, Check, ChevronRight, ArrowLeft, Filter, Grid, Eye, X, Plus, Minus, ShieldCheck, Truck } from 'lucide-react';
 
-interface HomePageProps {
-  onProductClick?: (id: number) => void;
-}
+const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => void }> = ({ product, onQuickView }) => {
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
 
-export const HomePage: React.FC<HomePageProps> = ({ onProductClick }) => {
+  const displayPrice = selectedVariant ? selectedVariant.price : product.price;
+  const displayImage = selectedVariant?.image ? selectedVariant.image : product.image;
+
+  return (
+    <div className={`bg-white rounded-2xl border hover:shadow-2xl transition-all p-4 group cursor-pointer flex flex-col h-full relative ${product.isFeatured ? 'border-yellow-200 ring-2 ring-yellow-50' : 'border-gray-100'}`}>
+      {product.isFeatured && (
+        <div className="absolute top-3 left-3 z-10 bg-yellow-400 text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-md">
+          <Star size={10} className="fill-white" /> สินค้าแนะนำ
+        </div>
+      )}
+      
+      <div className="relative mb-4 flex-shrink-0 overflow-hidden rounded-xl h-44 bg-gray-50">
+        <img 
+          src={displayImage} 
+          alt={product.name} 
+          className="w-full h-full object-contain group-hover:scale-110 transition duration-700" 
+        />
+        {/* Quick View Overlay Button */}
+        <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px]">
+          <button 
+            onClick={(e) => {
+              e.stopPropagation();
+              onQuickView(product);
+            }}
+            className="bg-white text-gray-800 px-4 py-2 rounded-full shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all transform translate-y-4 group-hover:translate-y-0 duration-300"
+          >
+            <Eye size={14} /> Quick View
+          </button>
+        </div>
+
+        {product.discount && (
+          <span className="absolute top-0 right-0 bg-red-600 text-white text-[11px] font-black px-3 py-1 rounded-bl-xl shadow-sm">
+            -{product.discount}%
+          </span>
+        )}
+      </div>
+      
+      <div className="flex-1 flex flex-col">
+        <h3 className="text-gray-800 text-sm font-bold line-clamp-2 h-10 mb-2 group-hover:text-[#0056b3] transition-colors leading-relaxed">
+          {product.name}
+        </h3>
+        
+        {product.variants && product.variants.length > 0 && (
+          <div className="mb-4">
+            <p className="text-[10px] text-gray-400 uppercase font-black mb-2 tracking-widest">เลือกตัวเลือก:</p>
+            <div className="flex flex-wrap gap-2">
+              {product.variants.map((variant) => (
+                <button
+                  key={variant.id}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSelectedVariant(variant);
+                  }}
+                  className={`text-[11px] px-3 py-1.5 rounded-lg border transition-all duration-300 flex items-center gap-1.5 font-bold ${
+                    selectedVariant?.id === variant.id 
+                      ? 'bg-blue-600 border-blue-600 text-white shadow-md ring-4 ring-blue-100' 
+                      : 'bg-white border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600'
+                  }`}
+                >
+                  {selectedVariant?.id === variant.id && <Check size={12} />}
+                  {variant.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mb-4 mt-auto">
+          <div className="flex items-baseline gap-2">
+            <span className="text-[#0056b3] text-2xl font-black">฿{displayPrice.toLocaleString()}</span>
+            {product.originalPrice && product.originalPrice > displayPrice && (
+              <span className="text-gray-400 text-xs line-through italic font-medium">฿{product.originalPrice.toLocaleString()}</span>
+            )}
+          </div>
+          {!selectedVariant && product.variants && product.variants.length > 0 && (
+             <span className="text-[10px] text-blue-500 font-bold uppercase tracking-tighter">ราคาเริ่มต้น</span>
+          )}
+        </div>
+      </div>
+
+      <button className="w-full bg-[#0056b3] text-white hover:bg-blue-700 transition rounded-xl py-3 text-sm font-black shadow-lg hover:shadow-blue-100 flex items-center justify-center gap-2 group/btn active:scale-95">
+        <ShoppingCart size={18} className="group-hover/btn:animate-bounce" /> เพิ่มลงตะกร้า
+      </button>
+    </div>
+  );
+};
+
+const ProductQuickViewModal: React.FC<{ product: Product | null; onClose: () => void }> = ({ product, onClose }) => {
+  if (!product) return null;
+
+  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  const displayPrice = selectedVariant ? selectedVariant.price : product.price;
+  const displayImage = selectedVariant?.image ? selectedVariant.image : product.image;
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
+      <div className="relative bg-white w-full max-w-4xl rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300">
+        <button 
+          onClick={onClose} 
+          className="absolute top-4 right-4 z-20 bg-gray-100 hover:bg-gray-200 text-gray-500 p-2 rounded-full transition-all"
+        >
+          <X size={24} />
+        </button>
+
+        {/* Left: Image */}
+        <div className="w-full md:w-1/2 bg-gray-50 p-8 flex items-center justify-center">
+          <img src={displayImage} alt={product.name} className="max-w-full max-h-80 object-contain drop-shadow-xl hover:scale-105 transition duration-500" />
+        </div>
+
+        {/* Right: Info */}
+        <div className="w-full md:w-1/2 p-8 md:p-12 overflow-y-auto max-h-[80vh] no-scrollbar">
+          <div className="mb-2">
+            <span className="bg-blue-100 text-blue-600 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">{product.category}</span>
+          </div>
+          <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-4 leading-tight">{product.name}</h2>
+          
+          <div className="flex items-center gap-2 mb-6">
+            <div className="flex text-yellow-400">
+              {[...Array(5)].map((_, i) => <Star key={i} size={16} fill={i < 4 ? "currentColor" : "none"} />)}
+            </div>
+            <span className="text-xs text-gray-400 font-bold">(4.8 / 5 รีวิวลูกค้า)</span>
+          </div>
+
+          <div className="bg-gray-50 p-6 rounded-2xl mb-8 border border-gray-100">
+            <div className="flex items-baseline gap-3 mb-2">
+               <span className="text-4xl font-black text-blue-600">฿{displayPrice.toLocaleString()}</span>
+               {product.originalPrice && (
+                 <span className="text-lg text-gray-400 line-through italic font-medium">฿{product.originalPrice.toLocaleString()}</span>
+               )}
+            </div>
+            {product.discount && (
+              <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-md font-bold uppercase tracking-tighter animate-pulse">
+                ประหยัด {product.discount}% ทันที
+              </span>
+            )}
+          </div>
+
+          {product.variants && product.variants.length > 0 && (
+            <div className="mb-8">
+              <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">เลือกตัวเลือกสินค้า:</h4>
+              <div className="flex flex-wrap gap-3">
+                {product.variants.map((v) => (
+                  <button 
+                    key={v.id} 
+                    onClick={() => setSelectedVariant(v)}
+                    className={`px-4 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${selectedVariant?.id === v.id ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-md ring-4 ring-blue-50' : 'border-gray-100 hover:border-gray-300 text-gray-600'}`}
+                  >
+                    {v.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4 mb-8">
+             <div className="flex items-center gap-3 text-sm font-medium text-gray-600">
+                <Truck size={18} className="text-blue-500" />
+                <span>จัดส่งฟรีเมื่อซื้อครบ ฿500 ขึ้นไป</span>
+             </div>
+             <div className="flex items-center gap-3 text-sm font-medium text-gray-600">
+                <ShieldCheck size={18} className="text-green-500" />
+                <span>รับประกันศูนย์ไทย 1 ปีเต็ม</span>
+             </div>
+          </div>
+
+          <div className="flex gap-4">
+            <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+               <button className="p-3 hover:bg-gray-50 transition text-gray-400"><Minus size={18} /></button>
+               <span className="px-4 font-black text-lg">1</span>
+               <button className="p-3 hover:bg-gray-50 transition text-gray-400"><Plus size={18} /></button>
+            </div>
+            <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black flex items-center justify-center gap-3 shadow-xl transition-all active:scale-95">
+              <ShoppingCart size={22} /> เพิ่มลงรถเข็น
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export const HomePage: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
+  const [currentView, setCurrentView] = useState<'landing' | 'all-products'>('landing');
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
 
   useEffect(() => {
     setProducts(db.getProducts());
   }, []);
 
-  const featuredProducts = useMemo(() => {
-    return products.filter(p => p.isFeatured);
-  }, [products]);
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, [currentView]);
 
-  return (
-    <div className="min-h-screen bg-gray-50 font-sans pb-20 md:pb-0 scroll-smooth">
-      <Header />
-      <main className="space-y-12">
-        <Hero />
-        
-        {/* Professional Build Services Matrix */}
-        <section className="container mx-auto px-4 mt-8">
-          <div className="flex flex-col md:flex-row gap-6">
-            <div className="flex-1 bg-[#001f3f] rounded-[2.5rem] p-8 text-white relative overflow-hidden group">
-               <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/20 rounded-full blur-3xl -mr-32 -mt-32"></div>
-               <div className="relative z-10">
-                 <div className="bg-blue-500 w-12 h-12 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-500/30">
-                   <PenTool size={24} />
-                 </div>
-                 <h3 className="text-2xl font-black mb-2 tracking-tight">Design & Consultation</h3>
-                 <p className="text-blue-200/70 text-sm leading-relaxed mb-6">ผู้เชี่ยวชาญพร้อมให้คำปรึกษา ออกแบบระบบน้ำครบวงจรสำหรับบ้านและอาคาร</p>
-                 <button className="bg-white text-blue-900 px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-blue-50 transition-colors">Start Design</button>
-               </div>
-            </div>
-            
-            <div className="flex-1 bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm group hover:border-blue-300 transition-all">
-               <div className="bg-slate-100 w-12 h-12 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                 <Hammer size={24} />
-               </div>
-               <h3 className="text-2xl font-black mb-2 tracking-tight text-slate-900">Custom Installation</h3>
-               <p className="text-slate-500 text-sm leading-relaxed mb-6">ทีมช่างมืออาชีพ ติดตั้งถังน้ำ ปั๊มน้ำ และตู้กดน้ำ มั่นใจในมาตรฐานงานสร้าง</p>
-               <button className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-colors">Book Service</button>
-            </div>
+  const featuredProducts = products.filter(p => p.isFeatured);
 
-            <div className="flex-1 bg-white rounded-[2.5rem] p-8 border border-slate-200 shadow-sm group hover:border-blue-300 transition-all">
-               <div className="bg-slate-100 w-12 h-12 rounded-2xl flex items-center justify-center mb-6 group-hover:bg-blue-50 group-hover:text-blue-600 transition-colors">
-                 <ShieldCheck size={24} />
-               </div>
-               <h3 className="text-2xl font-black mb-2 tracking-tight text-slate-900">Maintenance Plan</h3>
-               <p className="text-slate-500 text-sm leading-relaxed mb-6">บริการดูแลรักษา ล้างเครื่องกรองน้ำ และเช็คระบบน้ำรายปี เพื่อความปลอดภัย</p>
-               <button className="bg-slate-900 text-white px-6 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-colors">Check Pricing</button>
-            </div>
-          </div>
-        </section>
-
-        {/* Flash Sale Section */}
-        <FlashSale products={products} onProductClick={onProductClick} />
-
-        {/* Featured Products Section with Modern Grid */}
-        {featuredProducts.length > 0 && (
-          <div className="container mx-auto px-4 py-8">
-             <div className="flex items-center justify-between mb-8">
-                <div className="flex items-center gap-3">
-                   <div className="p-2.5 bg-yellow-50 rounded-2xl text-yellow-500 shadow-sm border border-yellow-100">
-                      <Star size={24} fill="currentColor" />
-                   </div>
-                   <div>
-                     <h2 className="text-3xl font-black text-slate-900 tracking-tight">Highlight Selection</h2>
-                     <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em] mt-1">Curated Build Essentials</p>
-                   </div>
-                </div>
-                <button className="hidden md:flex items-center gap-2 text-sm font-bold text-blue-600 hover:text-blue-800 transition-colors">
-                  View Catalogue <Layout size={16} />
-                </button>
-             </div>
-             
-             <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-                {featuredProducts.map(product => (
-                   <div 
-                     key={product.id} 
-                     onClick={() => onProductClick?.(product.id)}
-                     className="group cursor-pointer bg-white rounded-[2rem] border border-slate-100 hover:border-blue-200 hover:shadow-2xl hover:shadow-blue-500/10 transition-all duration-500 p-4"
-                   >
-                      <div className="aspect-square bg-slate-50 rounded-[1.5rem] overflow-hidden mb-4 relative p-4">
-                         <img src={product.image} alt={product.name} className="w-full h-full object-contain mix-blend-multiply group-hover:scale-110 transition-transform duration-700" />
-                         <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-                            {product.tags?.slice(0, 1).map(tag => (
-                              <span key={tag} className="bg-white/90 backdrop-blur px-2.5 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest text-blue-600 shadow-sm border border-blue-50">{tag}</span>
-                            ))}
-                         </div>
-                      </div>
-                      <div className="px-1">
-                        <h3 className="text-sm font-bold text-slate-800 line-clamp-2 mb-2 group-hover:text-blue-600 transition-colors h-10 leading-tight">{product.name}</h3>
-                        <div className="flex items-end gap-2">
-                           <span className="text-xl font-black text-slate-900">฿{product.price.toLocaleString()}</span>
-                           {product.originalPrice && <span className="text-xs text-slate-400 line-through mb-1">฿{product.originalPrice.toLocaleString()}</span>}
-                        </div>
-                      </div>
-                   </div>
-                ))}
-             </div>
-          </div>
-        )}
-
-        <CategorySection />
-        
-        {/* Recommended Products Grid */}
-        <div className="container mx-auto px-4 py-12">
-           <div className="flex items-center justify-between mb-8">
-              <div>
-                <h2 className="text-3xl font-black text-slate-900 tracking-tight">Recommended for Your Build</h2>
-                <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em] mt-1">Based on industry standards</p>
-              </div>
-              <button className="text-xs font-black text-slate-400 hover:text-blue-600 uppercase tracking-widest transition-colors">Explore All</button>
-           </div>
-           
-           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
-             {products.map((product) => (
-                <div 
-                    key={product.id} 
-                    onClick={() => onProductClick?.(product.id)}
-                    className="bg-white rounded-[2rem] border border-slate-100 hover:border-blue-200 hover:shadow-2xl transition-all duration-500 p-4 group cursor-pointer flex flex-col justify-between"
-                >
-                   <div>
-                       <div className="relative mb-4 aspect-square bg-slate-50 rounded-[1.5rem] p-4 flex items-center justify-center">
-                          <img src={product.image} alt={product.name} className="w-full h-full object-contain group-hover:scale-105 transition duration-500 mix-blend-multiply" />
-                          {product.discount && (
-                             <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-black px-2.5 py-1 rounded-bl-[1rem] rounded-tr-[1.5rem] shadow-sm">
-                               -{product.discount}%
-                             </span>
-                          )}
-                       </div>
-                       <h3 className="text-slate-700 text-sm font-bold line-clamp-2 h-10 mb-2 leading-tight px-1">{product.name}</h3>
-                       <div className="mb-4 px-1">
-                          <span className="text-blue-600 text-lg font-black block">฿{product.price.toLocaleString()}</span>
-                          {product.originalPrice && (
-                            <span className="text-slate-400 text-xs line-through">฿{product.originalPrice.toLocaleString()}</span>
-                          )}
-                       </div>
-                   </div>
-                   <button className="w-full bg-slate-50 text-slate-900 hover:bg-blue-600 hover:text-white transition-all rounded-xl py-3 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 active:scale-95 shadow-sm">
-                      <ShoppingCart size={14} /> Add to Project
-                   </button>
-                </div>
-             ))}
-           </div>
-        </div>
-      </main>
-      <Footer />
+  const LandingView = () => (
+    <>
+      <Hero />
+      <FlashSale products={products} />
       
-      {/* Mobile Sticky Navigation */}
-      <div className="md:hidden fixed bottom-6 left-6 right-6 bg-slate-900/95 backdrop-blur-md rounded-2xl py-4 px-8 flex justify-between items-center z-[100] text-[10px] text-white/50 font-black uppercase tracking-widest shadow-2xl">
-         <div className="flex flex-col items-center text-white">
-            <Star size={20} fill="currentColor" className="mb-1 text-yellow-400" />
-            <span>Home</span>
+      {/* Featured Products Section */}
+      {featuredProducts.length > 0 && (
+        <div className="container mx-auto px-4 py-12">
+          <div className="flex items-center gap-3 mb-8 border-b-2 border-yellow-200 pb-4">
+            <div className="bg-yellow-400 p-2.5 rounded-xl shadow-lg">
+              <Star className="text-white fill-white" size={22} />
+            </div>
+            <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">สินค้าแนะนำพิเศษ</h2>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+            {featuredProducts.map((product) => (
+              <ProductCard key={product.id} product={product} onQuickView={setQuickViewProduct} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      <CategorySection />
+      
+      {/* Recommended Products Section */}
+      <div className="container mx-auto px-4 py-12">
+         <div className="flex items-center justify-between mb-8 border-b-2 border-blue-100 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="bg-blue-600 p-2.5 rounded-xl shadow-lg">
+                <Star className="text-white fill-white" size={22} />
+              </div>
+              <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">สินค้าที่คุณอาจสนใจ</h2>
+            </div>
+            <button 
+              onClick={() => setCurrentView('all-products')}
+              className="text-sm font-black text-[#0056b3] hover:text-blue-800 flex items-center gap-1.5 transition-all group bg-blue-50 px-4 py-2 rounded-full"
+            >
+              ดูทั้งหมด <ChevronRight size={16} className="group-hover:translate-x-1 transition-transform" />
+            </button>
          </div>
-         <div className="flex flex-col items-center">
-            <Layout size={20} className="mb-1" />
-            <span>Matrix</span>
-         </div>
-         <div className="flex flex-col items-center">
-            <ShoppingCart size={20} className="mb-1" />
-            <span>Project</span>
+         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+           {products.slice(0, 10).map((product) => (
+              <ProductCard key={product.id} product={product} onQuickView={setQuickViewProduct} />
+           ))}
          </div>
       </div>
+    </>
+  );
+
+  const AllProductsView = () => (
+    <div className="container mx-auto px-4 py-10">
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-10 gap-6">
+        <div className="flex items-center gap-4">
+          <button 
+            onClick={() => setCurrentView('landing')}
+            className="p-3 bg-white shadow-md hover:shadow-lg rounded-2xl transition-all text-gray-600 active:scale-95"
+          >
+            <ArrowLeft size={24} strokeWidth={2.5} />
+          </button>
+          <div>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">สินค้าทั้งหมด</h1>
+            <p className="text-sm text-gray-400 font-bold uppercase tracking-widest mt-1">Total {products.length} Products</p>
+          </div>
+        </div>
+        
+        <div className="flex gap-4 w-full md:w-auto">
+          <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white border-2 border-gray-100 rounded-2xl text-sm font-black hover:border-blue-200 transition-all shadow-sm">
+            <Filter size={18} /> กรองสินค้า
+          </button>
+          <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-3 bg-white border-2 border-gray-100 rounded-2xl text-sm font-black hover:border-blue-200 transition-all shadow-sm">
+            <Grid size={18} /> เรียงลำดับ
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+        {products.map((product) => (
+          <ProductCard key={product.id} product={product} onQuickView={setQuickViewProduct} />
+        ))}
+      </div>
+      
+      {products.length === 0 && (
+        <div className="py-24 text-center">
+          <div className="bg-gray-100 w-24 h-24 rounded-full flex items-center justify-center mx-auto mb-6 shadow-inner">
+            <Grid className="text-gray-300" size={40} />
+          </div>
+          <p className="text-gray-400 font-black text-xl">ไม่พบรายการสินค้าในขณะนี้</p>
+          <button onClick={() => setCurrentView('landing')} className="mt-6 text-blue-600 font-bold underline">กลับสู่หน้าหลัก</button>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
+      <Header />
+      <main className="min-h-[60vh]">
+        {currentView === 'landing' ? <LandingView /> : <AllProductsView />}
+      </main>
+      <AiAssistant />
+      <Footer />
+      
+      {/* Quick View Modal */}
+      <ProductQuickViewModal product={quickViewProduct} onClose={() => setQuickViewProduct(null)} />
     </div>
   );
 };
