@@ -15,7 +15,7 @@ export const CATEGORIES: Category[] = [
   { id: 11, name: 'ปั๊มน้ำ', icon: 'https://waree-th.shop/image/thumbnails/1b/8b/______________________png-112823-190x120.png', iconKey: 'waves' },
   { id: 12, name: 'ตู้กดน้ำดื่ม', icon: 'https://waree-th.shop/image/thumbnails/1b/8b/________________________________________png-112824-190x120.png', iconKey: 'glass-water' },
   { id: 13, name: 'ถังเก็บน้ำใต้ดิน', icon: 'https://waree-th.shop/image/thumbnails/19/07/0l4KfUFTu2JhR8qffw4NdwqPkVjDMVtPMAbhWaqW_png-102522-190x120.png', iconKey: 'arrow-down-to-line' },
-  { id: 14, name: 'เครื่องกรองน้ำและอุปกรณ์..', icon: 'https://waree-th.shop/image/thumbnails/1b/8b/__________________________________png-112821-190x120.png', iconKey: 'filter' },
+  { id: 14, name: 'เครื่องกรองน้ำและอุปกรณ์', icon: 'https://waree-th.shop/image/thumbnails/1b/8b/__________________________________png-112821-190x120.png', iconKey: 'filter' },
   { id: 15, name: 'แทงค์น้ำ ไฟเบอร์กลาส', icon: 'https://images.unsplash.com/photo-1542013936693-884638332954?w=100', iconKey: 'box' },
   { id: 16, name: 'Water Filter Accessories', icon: 'https://waree-th.shop/image/thumbnails/1b/8b/__________________________________png-112821-190x120.png', iconKey: 'filter-cog' },
 ];
@@ -46,7 +46,7 @@ export const CATEGORY_DETAILS: Record<number, CategoryDetail> = {
     promoText: 'Discover our premium PE water tanks, built for durability and reliability. Special offers available now!',
     promoImg: 'https://images.unsplash.com/photo-1584622781564-1d9876a13d00?w=300'
   },
-  // ... (Other categories omitted for brevity but remain in real implementation)
+  // ... (Other categories omitted for brevity in this mock data set.)
 };
 
 const RAW_PRODUCTS: Product[] = [
@@ -143,7 +143,11 @@ export class DatabaseService {
     this.saveProducts();
   }
   updateProduct(product: Product) {
-    this.products = this.products.map(p => p.id === product.id ? product : p);
+    const normalizedProduct = { ...product };
+    if (!normalizedProduct.images && normalizedProduct.image) {
+      normalizedProduct.images = [normalizedProduct.image];
+    }
+    this.products = this.products.map(p => p.id === product.id ? normalizedProduct : p);
     this.saveProducts();
   }
   deleteProduct(id: number) {
