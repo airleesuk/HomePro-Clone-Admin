@@ -50,7 +50,7 @@ export class AiService {
       Available Block Types & Schemas:
       1. hero: { title: string, subtitle: string, image: string (use a realistic unsplash source url with keywords relevant to the topic), buttonText: string }
       2. text: { content: string (Write professional, persuasive marketing copy in Thai HTML format using h2, h3, p, ul, li tags. Do not use markdown.) }
-      3. product-row: { title: string, category: string (Choose best fit from: 'แทงค์น้ำ PE', 'เครื่องใช้ไฟฟ้า', 'ปั๊มน้ำ', 'ถังเก็บน้ำสแตนเลส', 'เครื่องกรองน้ำและอุปกรณ์..', 'All'), count: number (default 4) }
+      3. product-row: { title: string, category: string (Choose best fit from: 'แทงค์น้ำ PE', 'เครื่องใช้ไฟฟ้า', 'ปั๊มน้ำ', 'ถังเก็บน้ำสแตนเลส', 'เครื่องกรองน้ำและอุปกรณ์', 'All'), count: number (default 4) }
       4. image: { url: string (use a realistic unsplash source url), alt: string, caption: string }
       5. spacer: { height: number (usually 30-50) }
 
