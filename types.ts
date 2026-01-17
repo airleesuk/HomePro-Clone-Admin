@@ -5,6 +5,7 @@ export interface ProductVariant {
   price: number;
   stock: number;
   image?: string;
+  images?: string[]; // Added for gallery support
 }
 
 export interface Product {
@@ -13,6 +14,7 @@ export interface Product {
   price: number;
   originalPrice?: number;
   image: string;
+  images?: string[]; // Added for gallery support
   category: string;
   stock: number;
   sold: number;
@@ -21,6 +23,7 @@ export interface Product {
   isFeatured?: boolean;
   rating?: number;
   variants?: ProductVariant[];
+  brandId?: number;
 }
 
 export interface Category {
@@ -28,6 +31,12 @@ export interface Category {
   name: string;
   icon: string; // URL for image
   iconKey?: string; // Key for Lucide icon lookup
+}
+
+export interface Brand {
+  id: number;
+  name: string;
+  logo: string;
 }
 
 export interface Banner {
@@ -51,7 +60,34 @@ export interface CategoryDetail {
   promoImg: string;
 }
 
+export interface AdminNotification {
+  id: string;
+  title: string;
+  message: string;
+  type: 'warning' | 'info' | 'success';
+  timestamp: Date;
+}
+
 export enum ViewMode {
   CLIENT = 'CLIENT',
-  ADMIN = 'ADMIN'
+  ADMIN = 'ADMIN',
+  PRODUCT_DETAIL = 'PRODUCT_DETAIL'
+}
+
+// Page Builder Types
+export type BlockType = 'hero' | 'product-row' | 'text' | 'image' | 'spacer';
+
+export interface PageBlock {
+  id: string;
+  type: BlockType;
+  data: any; // Flexible data depending on type
+}
+
+export interface Page {
+  id: string;
+  title: string;
+  slug: string;
+  blocks: PageBlock[];
+  status: 'published' | 'draft';
+  updatedAt: string;
 }

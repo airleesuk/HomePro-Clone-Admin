@@ -1,7 +1,9 @@
 
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { X, ChevronRight, Zap, Droplets, Wrench, Grid, HardHat, Lightbulb, Snowflake, Filter, ArrowDownUp, Truck } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
+import { X, ChevronRight, Zap, Droplets, Wrench, Grid, HardHat, Lightbulb, FlaskConical, Database, Utensils, Snowflake, Gauge, Bath, Truck, Recycle, Waves, GlassWater, ArrowDownToLine, Filter, Box, ArrowLeft, Home, Phone, FileText, Edit2 } from 'lucide-react';
 import { db, CATEGORIES } from '../services/mockDb';
+import { MegaMenuEditModal } from './admin/MegaMenuEditModal';
 
 interface MegaMenuProps {
   isOpen: boolean;
@@ -15,283 +17,282 @@ const IconMap: Record<string, React.ReactNode> = {
   'grid': <Grid size={18} />,
   'hard-hat': <HardHat size={18} />,
   'lightbulb': <Lightbulb size={18} />,
+  'flask': <FlaskConical size={18} />,
+  'database': <Database size={18} />,
+  'utensils': <Utensils size={18} />,
   'snowflake': <Snowflake size={18} />,
+  'gauge': <Gauge size={18} />,
+  'bath': <Bath size={18} />,
   'truck': <Truck size={18} />,
+  'recycle': <Recycle size={18} />,
+  'waves': <Waves size={18} />,
+  'glass-water': <GlassWater size={18} />,
+  'arrow-down-to-line': <ArrowDownToLine size={18} />,
+  'filter': <Filter size={18} />,
+  'box': <Box size={18} />,
 };
+
+// Standard links for mobile view
+const MOBILE_NAV_LINKS = [
+  { label: 'หน้าแรก', icon: <Home size={18}/>, href: '#' },
+  { label: 'สินค้าทั้งหมด', icon: <Box size={18}/>, href: '#' },
+  { label: 'โปรโมชั่น', icon: <Zap size={18}/>, href: '#', isPromo: true },
+  { label: 'บริการงานระบบ', icon: <Wrench size={18}/>, href: '#' },
+  { label: 'บทความสาระน่ารู้', icon: <FileText size={18}/>, href: '#' },
+  { label: 'ติดต่อเรา', icon: <Phone size={18}/>, href: '#' },
+];
 
 export const MegaMenu: React.FC<MegaMenuProps> = ({ isOpen, onClose }) => {
   const [activeCategoryId, setActiveCategoryId] = useState<number>(1);
-  const [filterType, setFilterType] = useState<string>('all');
-  const menuRef = useRef<HTMLDivElement>(null);
-  const tabsRef = useRef<(HTMLButtonElement | null)[]>([]);
+  const [showMobileDetail, setShowMobileDetail] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0); // To force re-render after save
   
-  // Focus management: when opened, focus the menu
+  // Parallax Effect & Scroll Lock
   useEffect(() => {
-    if (isOpen && menuRef.current) {
-      menuRef.current.focus();
+    const root = document.getElementById('root');
+    if (isOpen) {
+        // Lock Body Scroll
+        document.body.style.overflow = 'hidden';
+        
+        // Apply Parallax/Scale Effect to Root
+        if (root) {
+            root.style.transform = 'scale(0.92) translateY(20px)';
+            root.style.transformOrigin = 'top center';
+            root.style.transition = 'transform 0.4s cubic-bezier(0.32, 0.72, 0, 1), border-radius 0.4s, filter 0.4s';
+            root.style.borderRadius = '24px';
+            root.style.filter = 'brightness(0.7) blur(1px)';
+            root.style.boxShadow = '0 25px 50px -12px rgba(0, 0, 0, 0.5)';
+            root.style.overflow = 'hidden'; // Ensure rounded corners clip content
+        }
+    } else {
+        document.body.style.overflow = '';
+        if (root) {
+            root.style.transform = '';
+            root.style.transformOrigin = '';
+            root.style.transition = 'transform 0.3s ease-out, border-radius 0.3s, filter 0.3s';
+            root.style.borderRadius = '';
+            root.style.filter = '';
+            root.style.boxShadow = '';
+            root.style.overflow = '';
+        }
+    }
+    
+    return () => {
+        document.body.style.overflow = '';
+        if (root) {
+            root.style.transform = '';
+            root.style.borderRadius = '';
+            root.style.filter = '';
+            root.style.boxShadow = '';
+            root.style.overflow = '';
+        }
+    };
+  }, [isOpen]);
+
+  // Reset mobile view when closed
+  useEffect(() => {
+    if (!isOpen) {
+        setShowMobileDetail(false);
     }
   }, [isOpen]);
 
-  // Filter and Sort Logic
-  const processedCategories = useMemo(() => {
-    const products = db.getProducts();
-    let result = [...CATEGORIES];
-
-    const getCatProducts = (catName: string) => products.filter(p => p.category === catName);
-
-    if (filterType === 'onsale') {
-      // Filter categories containing items on sale
-      result = result.filter(cat => {
-        const catProducts = getCatProducts(cat.name);
-        return catProducts.some(p => p.isFlashSale || (p.discount && p.discount > 0));
-      });
-    } else if (filterType === 'newest') {
-      // Sort categories by the ID of the newest product (assuming higher ID is newer)
-      result.sort((a, b) => {
-        const prodA = getCatProducts(a.name);
-        const prodB = getCatProducts(b.name);
-        const maxIdA = prodA.length ? Math.max(...prodA.map(p => p.id)) : 0;
-        const maxIdB = prodB.length ? Math.max(...prodB.map(p => p.id)) : 0;
-        return maxIdB - maxIdA;
-      });
-    } else if (filterType === 'bestseller') {
-      // Sort categories by total sales volume
-      result.sort((a, b) => {
-        const prodA = getCatProducts(a.name);
-        const prodB = getCatProducts(b.name);
-        const soldA = prodA.reduce((sum, p) => sum + p.sold, 0);
-        const soldB = prodB.reduce((sum, p) => sum + p.sold, 0);
-        return soldB - soldA;
-      });
-    }
-    
-    return result;
-  }, [filterType]);
-
-  // Ensure active category is valid after filter change
-  useEffect(() => {
-    if (processedCategories.length > 0) {
-      const exists = processedCategories.find(c => c.id === activeCategoryId);
-      if (!exists) {
-        setActiveCategoryId(processedCategories[0].id);
-      }
-    } else {
-      setActiveCategoryId(0); // No categories match
-    }
-  }, [processedCategories, activeCategoryId]);
-  
-  const handleKeyDown = (e: React.KeyboardEvent, index: number) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      const nextIndex = (index + 1) % processedCategories.length;
-      tabsRef.current[nextIndex]?.focus();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      const prevIndex = (index - 1 + processedCategories.length) % processedCategories.length;
-      tabsRef.current[prevIndex]?.focus();
-    } else if (e.key === 'Home') {
-      e.preventDefault();
-      tabsRef.current[0]?.focus();
-    } else if (e.key === 'End') {
-      e.preventDefault();
-      tabsRef.current[processedCategories.length - 1]?.focus();
-    }
-  };
-
   if (!isOpen) return null;
 
+  // Use refreshKey to ensure we get updated data from db
   const activeCategory = db.getCategoryDetail(activeCategoryId);
-  const displayCategory = activeCategoryId !== 0 ? (activeCategory || db.getCategoryDetail(1)) : null;
+  const displayCategory = activeCategory || db.getCategoryDetail(1);
+  const currentCategoryObj = CATEGORIES.find(c => c.id === activeCategoryId);
 
-  return (
+  const handleCategoryClick = (id: number) => {
+    setActiveCategoryId(id);
+    setShowMobileDetail(true);
+  };
+
+  const handleSaveEdit = () => {
+    setRefreshKey(prev => prev + 1);
+  };
+
+  // Render via Portal to stay outside the scaled root
+  return createPortal(
     <div 
-      className="fixed inset-0 z-[100] flex items-start justify-center p-0 md:p-4 overflow-hidden"
-      role="dialog"
-      aria-modal="true"
-      aria-label="Product Categories Menu"
+        className="fixed inset-0 z-[9999] flex justify-start md:justify-center md:items-start p-0 md:p-4 overflow-hidden h-[100dvh]" 
+        id="mobile-navigation-drawer"
+        role="dialog"
+        aria-modal="true"
     >
-      <div 
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity" 
-        onClick={onClose} 
-        aria-hidden="true"
-      />
+      <div className="absolute inset-0 bg-black/20 backdrop-blur-[2px] transition-opacity" onClick={onClose} aria-hidden="true" />
 
+      {/* Main Container - Drawer on Mobile, Modal on Desktop */}
       <div 
-        ref={menuRef}
-        className="relative bg-white w-full max-w-7xl h-full md:h-auto md:max-h-[90vh] rounded-none md:rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300 outline-none"
-        tabIndex={-1}
+        className={`relative bg-white w-[85vw] max-w-sm md:w-full md:max-w-7xl h-full md:h-auto md:max-h-[90vh] md:rounded-2xl shadow-2xl flex flex-col md:flex-row overflow-hidden animate-in slide-in-from-left duration-300 md:animate-in md:fade-in md:slide-in-from-top-4`}
       >
         
-        {/* Left Sidebar */}
-        <div className="w-full md:w-72 bg-gray-50 border-r border-gray-100 overflow-y-auto shrink-0 flex flex-col">
-          <div className="p-6 flex justify-between items-center border-b border-gray-200 md:hidden">
-            <span className="font-bold text-[#0056b3]">หมวดหมู่ทั้งหมด</span>
-            <button 
-              onClick={onClose}
-              className="p-1 hover:bg-gray-200 rounded-full transition-colors"
-              aria-label="Close menu"
-            >
-              <X size={24} />
-            </button>
+        {/* Left Sidebar (Category List) */}
+        {/* On Mobile: Hidden if showing detail. On Desktop: Always visible. */}
+        <div className={`w-full md:w-72 bg-gray-50 border-r border-gray-100 overflow-y-auto shrink-0 flex flex-col ${showMobileDetail ? 'hidden md:flex' : 'flex h-full md:h-auto'}`}>
+          
+          {/* Mobile Header */}
+          <div className="p-4 flex justify-between items-center border-b border-gray-200 md:hidden bg-white sticky top-0 z-10 shadow-sm shrink-0">
+            <span className="font-black text-[#0056b3] text-lg">เมนูหลัก</span>
+            <button onClick={onClose} className="p-2 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors" aria-label="Close menu"><X size={20} /></button>
           </div>
 
-          {/* Filter Bar */}
-          <div className="px-5 py-3 border-b border-gray-200/50 bg-white sticky top-0 z-10 flex items-center gap-2">
-            <Filter size={14} className="text-gray-400 shrink-0" />
-            <select 
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="w-full text-xs font-bold text-gray-600 bg-transparent outline-none cursor-pointer hover:text-blue-600 transition-colors py-1"
-              aria-label="Filter categories"
-            >
-              <option value="all">หมวดหมู่ทั้งหมด</option>
-              <option value="newest">สินค้ามาใหม่ 🔥</option>
-              <option value="bestseller">ขายดียอดนิยม 🏆</option>
-              <option value="onsale">กำลังลดราคา 🏷️</option>
-            </select>
-          </div>
+          <div className="overflow-y-auto flex-1 pb-safe no-scrollbar">
+            {/* Mobile Standard Links */}
+            <div className="md:hidden py-2 border-b border-gray-200 bg-white">
+               {MOBILE_NAV_LINKS.map((link, idx) => (
+                 <a 
+                   key={idx} 
+                   href={link.href}
+                   className={`flex items-center gap-4 px-6 py-3.5 hover:bg-gray-50 transition-colors ${link.isPromo ? 'text-orange-500 font-bold' : 'text-gray-700 font-medium'}`}
+                 >
+                   <span className={link.isPromo ? 'text-orange-500' : 'text-gray-400'}>{link.icon}</span>
+                   {link.label}
+                 </a>
+               ))}
+            </div>
 
-          <div 
-            className="py-2 flex-1" 
-            role="tablist" 
-            aria-orientation="vertical"
-            aria-label="Product Categories"
-          >
-            {processedCategories.length > 0 ? (
-              processedCategories.map((cat, index) => (
+            <div className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider bg-gray-50 md:bg-transparent sticky top-0 md:static">
+               หมวดหมู่สินค้า
+            </div>
+
+            <nav className="py-2 pb-20 md:pb-2">
+              {CATEGORIES.map((cat) => (
                 <button 
                   key={cat.id} 
-                  ref={el => { tabsRef.current[index] = el; }}
-                  role="tab"
-                  aria-selected={activeCategoryId === cat.id}
-                  aria-controls="category-panel"
-                  id={`category-tab-${cat.id}`}
-                  tabIndex={activeCategoryId === cat.id ? 0 : -1}
                   onMouseEnter={() => setActiveCategoryId(cat.id)}
-                  onClick={() => setActiveCategoryId(cat.id)}
+                  onClick={() => handleCategoryClick(cat.id)}
                   onFocus={() => setActiveCategoryId(cat.id)}
-                  onKeyDown={(e) => handleKeyDown(e, index)}
-                  className={`w-full flex items-center justify-between px-6 py-4 cursor-pointer transition-all group outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500 ${activeCategoryId === cat.id ? 'bg-white text-[#0056b3] font-bold border-y border-gray-100 shadow-sm' : 'text-gray-600 hover:bg-white hover:text-[#0056b3]'}`}
+                  className={`w-full flex items-center justify-between px-6 py-3.5 cursor-pointer transition-all group outline-none focus:bg-white ${activeCategoryId === cat.id ? 'bg-white text-[#0056b3] font-bold border-y border-gray-100 shadow-sm md:shadow-none' : 'text-gray-600 hover:bg-white hover:text-[#0056b3]'}`}
+                  aria-expanded={activeCategoryId === cat.id}
                 >
-                  <div className="flex items-center gap-4 w-full">
-                    <span className="w-8 h-8 rounded-md overflow-hidden bg-white border border-gray-100 p-0.5 shrink-0">
-                      {cat.icon ? (
-                        <img src={cat.icon} className="w-full h-full object-contain" alt="" />
-                      ) : (
-                        <span className={`${activeCategoryId === cat.id ? 'text-[#0056b3]' : 'text-gray-400 group-hover:text-[#0056b3]'}`}>
-                          {cat.iconKey ? IconMap[cat.iconKey] : <Zap size={18} />}
-                        </span>
-                      )}
+                  <div className="flex items-center gap-4">
+                    <span className={`${activeCategoryId === cat.id ? 'text-[#0056b3]' : 'text-gray-400 group-hover:text-[#0056b3]'}`}>
+                      {cat.iconKey ? IconMap[cat.iconKey] : <Zap size={18} />}
                     </span>
-                    <span className="text-sm line-clamp-1 text-left flex-1">{cat.name}</span>
+                    <span className="text-sm text-left">{cat.name}</span>
                   </div>
-                  <ChevronRight size={14} className={`shrink-0 transition-transform duration-200 ${activeCategoryId === cat.id ? 'text-[#0056b3] translate-x-1' : 'text-gray-300'}`} />
+                  <ChevronRight size={14} className={`transition-transform duration-200 ${activeCategoryId === cat.id ? 'text-[#0056b3] translate-x-1' : 'text-gray-300'}`} />
                 </button>
-              ))
+              ))}
+            </nav>
+          </div>
+        </div>
+
+        {/* Right Content Area (Details) */}
+        {/* On Mobile: Hidden unless showing detail. On Desktop: Always visible. */}
+        <div className={`flex-1 overflow-y-auto bg-white relative flex flex-col ${showMobileDetail ? 'flex h-full animate-in slide-in-from-right duration-200' : 'hidden md:flex'}`}>
+          
+          {/* Mobile Detail Header (Back Button) */}
+          <div className="md:hidden p-4 border-b flex items-center gap-3 sticky top-0 bg-white z-20 shadow-sm shrink-0">
+             <button onClick={() => setShowMobileDetail(false)} className="p-2 hover:bg-gray-100 rounded-full text-gray-600 transition-colors" aria-label="Back to menu">
+                <ArrowLeft size={20} />
+             </button>
+             <span className="font-bold text-gray-800 line-clamp-1">{displayCategory?.name || 'รายละเอียด'}</span>
+             <button onClick={onClose} className="ml-auto p-2 hover:bg-gray-100 rounded-full text-gray-400 transition-colors" aria-label="Close">
+                <X size={20} />
+             </button>
+          </div>
+
+          {/* Desktop Close Button */}
+          <button onClick={onClose} className="absolute top-8 right-8 text-gray-400 hover:text-gray-600 hidden md:block z-10 transition-colors" aria-label="Close menu">
+            <X size={32} />
+          </button>
+
+          <div className="p-6 md:p-12 overflow-y-auto pb-safe">
+            {displayCategory ? (
+              <div key={displayCategory.id} className="flex flex-col lg:flex-row gap-12 animate-in fade-in duration-300 pb-20 md:pb-0">
+                <div className="flex-1">
+                  <h3 className="text-2xl font-black text-gray-900 mb-8 border-b pb-6 flex items-center gap-3 hidden md:flex group">
+                    <span className="bg-blue-600 p-2 rounded-lg text-white">
+                        {IconMap[displayCategory.iconKey] || <Zap size={18} />}
+                    </span> 
+                    {displayCategory.name}
+                    
+                    <button 
+                      onClick={() => setIsEditModalOpen(true)}
+                      className="ml-2 text-gray-300 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all p-2 hover:bg-blue-50 rounded-lg"
+                      title="Edit Mega Menu Layout"
+                      aria-label="Edit mega menu layout"
+                    >
+                      <Edit2 size={16} />
+                    </button>
+                  </h3>
+
+                  {/* Highlight Icons/Photos - Dynamic Grid */}
+                  <div className={`grid gap-4 md:gap-6 mb-8 md:mb-12 ${
+                    displayCategory.highlights.length <= 2 ? 'grid-cols-2' : 
+                    displayCategory.highlights.length === 3 ? 'grid-cols-3' :
+                    'grid-cols-2 md:grid-cols-3 lg:grid-cols-4'
+                  }`}>
+                    {displayCategory.highlights.map((item, i) => (
+                      <div key={i} className="group cursor-pointer">
+                        <div className="aspect-square rounded-2xl overflow-hidden mb-3 border-2 border-transparent group-hover:border-blue-500 transition-all shadow-sm bg-gray-50">
+                          {item.img ? (
+                            <img src={item.img} alt={item.title} className="w-full h-full object-cover group-hover:scale-110 transition duration-700" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-300"><Zap size={24} /></div>
+                          )}
+                        </div>
+                        <h4 className="font-bold text-center text-gray-800 text-xs uppercase tracking-wider">{item.title}</h4>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Sub-category Scannable List */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-10 gap-y-8 md:gap-y-12">
+                    {displayCategory.subCategories.map((sub, idx) => (
+                      <div key={idx} className="space-y-3 md:space-y-5">
+                        <h5 className="font-black text-gray-900 text-sm border-l-4 border-blue-600 pl-3 uppercase tracking-widest">{sub.title}</h5>
+                        <ul className="space-y-2 text-[13px] text-gray-500 font-medium pl-1">
+                          {sub.items.map((link, lIdx) => (
+                            <li key={lIdx} className="hover:text-blue-600 hover:translate-x-1 cursor-pointer transition-all flex items-start gap-1.5 leading-relaxed py-0.5">
+                              <span className="text-blue-300 mt-0.5">•</span> 
+                              <a href="#" className="hover:underline">{link}</a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Side Promotion Card */}
+                <div className="w-full lg:w-96 shrink-0 h-fit mt-8 lg:mt-0">
+                  <div className="relative rounded-3xl overflow-hidden shadow-2xl group border border-gray-100">
+                    <img src={displayCategory.promoImg || 'https://via.placeholder.com/300x400'} alt="Special Deal" className="w-full aspect-[3/4] object-cover group-hover:scale-105 transition duration-1000" />
+                    <div className="absolute inset-0 bg-gradient-to-t from-blue-900/95 via-blue-900/40 to-transparent p-6 md:p-10 flex flex-col justify-end">
+                      <div className="bg-yellow-400 text-blue-900 text-[10px] font-black px-4 py-1.5 rounded-full w-fit mb-4 uppercase tracking-tighter">Recommended by Expert</div>
+                      <h3 className="text-white text-2xl md:text-3xl font-black mb-4 leading-tight">Best Solution for Your Home</h3>
+                      <p className="text-blue-50 text-sm mb-6 md:mb-8 leading-relaxed opacity-90 line-clamp-3 md:line-clamp-none">
+                        {displayCategory.promoText}
+                      </p>
+                      <button className="bg-white text-blue-900 font-black py-3 md:py-4 px-8 rounded-2xl text-sm w-full transition-all shadow-xl hover:bg-yellow-400 active:scale-95 focus:ring-4 focus:ring-blue-500/50">
+                        VIEW PRODUCTS
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             ) : (
-              <div className="p-8 text-center text-gray-400 text-xs">
-                 <p>ไม่พบหมวดหมู่ตามเงื่อนไข</p>
+              <div className="flex items-center justify-center h-96 text-gray-400">
+                  <p>เลือกหมวดหมู่เพื่อดูรายละเอียด</p>
               </div>
             )}
           </div>
         </div>
-
-        {/* Right Content Area */}
-        <div 
-          className="flex-1 overflow-y-auto bg-white p-6 md:p-12 relative"
-          role="tabpanel"
-          id="category-panel"
-          aria-labelledby={`category-tab-${activeCategoryId}`}
-        >
-          <button 
-            onClick={onClose} 
-            className="absolute top-8 right-8 text-gray-400 hover:text-gray-600 hidden md:block focus:outline-none focus:ring-2 focus:ring-blue-500 rounded-lg p-1"
-            aria-label="Close menu"
-          >
-            <X size={32} />
-          </button>
-
-          {displayCategory ? (
-            <div key={displayCategory.id} className="flex flex-col lg:flex-row gap-12 animate-in fade-in duration-500">
-              <div className="flex-1">
-                <h3 className="text-2xl font-black text-gray-900 mb-8 border-b pb-6 flex items-center gap-3">
-                   <div className="w-12 h-12 p-1 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center shrink-0">
-                      {displayCategory.promoImg ? (
-                         <img src={displayCategory.promoImg} alt="" className="w-full h-full object-contain mix-blend-multiply" />
-                      ) : (
-                         <span className="text-blue-600">
-                            {IconMap[displayCategory.iconKey] || <Zap size={24} />}
-                         </span>
-                      )}
-                   </div>
-                   {displayCategory.name}
-                </h3>
-
-                {/* Highlight Icons/Photos (if any) */}
-                {displayCategory.highlights && displayCategory.highlights.length > 0 && (
-                  <div className="grid grid-cols-3 gap-6 mb-12">
-                    {displayCategory.highlights.map((item, i) => (
-                      <a href="#" key={i} className="group cursor-pointer block focus:outline-none focus:ring-4 focus:ring-blue-100 rounded-2xl" role="link">
-                        <div className="aspect-square rounded-2xl overflow-hidden mb-3 border-2 border-transparent group-hover:border-blue-500 transition-all shadow-sm bg-gray-50 flex items-center justify-center p-2">
-                          <img src={item.img} alt="" className="w-full h-full object-contain group-hover:scale-110 transition duration-700" />
-                        </div>
-                        <h4 className="font-bold text-center text-gray-800 text-xs uppercase tracking-wider">{item.title}</h4>
-                      </a>
-                    ))}
-                  </div>
-                )}
-
-                {/* Sub-category Scannable List */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-10 gap-y-12">
-                  {displayCategory.subCategories.map((sub, idx) => (
-                    <div key={idx} className="space-y-5">
-                      <h5 className="font-black text-gray-900 text-sm border-l-4 border-blue-600 pl-3 uppercase tracking-widest">{sub.title}</h5>
-                      <ul className="space-y-2.5 text-[13px] text-gray-500 font-medium">
-                        {sub.items.map((link, lIdx) => (
-                          <li key={lIdx}>
-                            <a 
-                              href="#" 
-                              className="hover:text-blue-600 hover:translate-x-1 cursor-pointer transition-all flex items-start gap-1.5 leading-relaxed focus:outline-none focus:text-blue-600 focus:translate-x-1"
-                            >
-                               <span className="text-blue-300 mt-0.5" aria-hidden="true">•</span> {link}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Side Promotion Card */}
-              <div className="w-full lg:w-96 shrink-0 h-fit">
-                <div className="relative rounded-3xl overflow-hidden shadow-2xl group border border-gray-100 bg-white">
-                  <div className="w-full aspect-[3/4] p-8 flex items-center justify-center bg-gradient-to-b from-blue-50 to-white">
-                     <img src={displayCategory.promoImg} alt="Special Deal" className="w-full h-full object-contain group-hover:scale-105 transition duration-1000 drop-shadow-xl" />
-                  </div>
-                  <div className="absolute inset-0 bg-gradient-to-t from-blue-900/95 via-blue-900/40 to-transparent p-10 flex flex-col justify-end">
-                    <div className="bg-yellow-400 text-blue-900 text-[10px] font-black px-4 py-1.5 rounded-full w-fit mb-4 uppercase tracking-tighter">สินค้าแนะนำ</div>
-                    <h3 className="text-white text-3xl font-black mb-4 leading-tight">{displayCategory.name}</h3>
-                    <p className="text-blue-50 text-sm mb-8 leading-relaxed opacity-90 line-clamp-3">
-                      {displayCategory.promoText}
-                    </p>
-                    <button className="bg-white text-blue-900 font-black py-4 px-8 rounded-2xl text-sm w-full transition-all shadow-xl hover:bg-yellow-400 active:scale-95 focus:outline-none focus:ring-4 focus:ring-white/50">
-                      ดูสินค้าทั้งหมด
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : (
-             <div className="flex flex-col items-center justify-center h-full text-gray-400 animate-in fade-in">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                  <Grid size={32} className="opacity-50" />
-                </div>
-                <p>กรุณาเลือกหมวดหมู่ที่สนใจจากเมนูด้านซ้าย</p>
-             </div>
-          )}
-        </div>
       </div>
-    </div>
+      
+      {currentCategoryObj && (
+        <MegaMenuEditModal 
+          isOpen={isEditModalOpen}
+          onClose={() => setIsEditModalOpen(false)}
+          category={currentCategoryObj}
+          onSave={handleSaveEdit}
+        />
+      )}
+    </div>,
+    document.body
   );
 };

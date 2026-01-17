@@ -8,38 +8,50 @@ import { Footer } from '../components/Footer';
 import { AiAssistant } from '../components/AiAssistant';
 import { db } from '../services/mockDb';
 import { Product, ProductVariant } from '../types';
-import { Star, ShoppingCart, Check, ChevronRight, ArrowLeft, Filter, Grid, Eye, X, Plus, Minus, ShieldCheck, Truck } from 'lucide-react';
+import { Star, ShoppingCart, Check, ChevronRight, ArrowLeft, Filter, Grid, Eye, X, Plus, Minus, ShieldCheck, Truck, Layers, ChevronDown } from 'lucide-react';
 
-const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => void }> = ({ product, onQuickView }) => {
+interface HomePageProps {
+  onProductClick?: (product: Product) => void;
+}
+
+const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => void; onClick?: (p: Product) => void }> = ({ product, onQuickView, onClick }) => {
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
 
   const displayPrice = selectedVariant ? selectedVariant.price : product.price;
   const displayImage = selectedVariant?.image ? selectedVariant.image : product.image;
-
-  // Function to handle variant selection (with toggle off)
-  const handleVariantClick = (e: React.MouseEvent, variant: ProductVariant) => {
-    e.stopPropagation();
-    if (selectedVariant?.id === variant.id) {
-      setSelectedVariant(null);
-    } else {
-      setSelectedVariant(variant);
-    }
-  };
+  const hasVariants = product.variants && product.variants.length > 0;
 
   return (
-    <div className={`bg-white rounded-2xl border hover:shadow-2xl transition-all p-4 group cursor-pointer flex flex-col h-full relative ${product.isFeatured ? 'border-yellow-200 ring-2 ring-yellow-50' : 'border-gray-100'}`}>
-      {product.isFeatured && (
-        <div className="absolute top-3 left-3 z-10 bg-yellow-400 text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-md">
-          <Star size={10} className="fill-white" /> สินค้าแนะนำ
-        </div>
+    <div 
+      onClick={() => onClick && onClick(product)}
+      className={`bg-white rounded-2xl border hover:shadow-2xl transition-all p-4 group cursor-pointer flex flex-col h-full relative ${product.isFeatured ? 'border-yellow-200 ring-2 ring-yellow-50' : 'border-gray-100'}`}
+    >
+      {/* Badges */}
+      <div className="absolute top-3 left-3 z-10 flex flex-col gap-1">
+        {product.isFeatured && (
+          <div className="bg-yellow-400 text-white text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-md">
+            <Star size={10} className="fill-white" /> แนะนำ
+          </div>
+        )}
+        {hasVariants && (
+           <div className="bg-purple-100 text-purple-600 text-[10px] font-bold px-3 py-1 rounded-full flex items-center gap-1 shadow-sm border border-purple-200">
+             <Layers size={10} /> มีตัวเลือก
+           </div>
+        )}
+      </div>
+      
+      {product.discount && (
+          <span className="absolute top-3 right-3 z-10 bg-red-600 text-white text-[11px] font-black px-2 py-1 rounded-lg shadow-sm">
+            -{product.discount}%
+          </span>
       )}
       
-      <div className="relative mb-4 flex-shrink-0 overflow-hidden rounded-xl h-44 bg-gray-50">
+      {/* Image */}
+      <div className="relative mb-4 flex-shrink-0 overflow-hidden rounded-xl h-44 bg-gray-50 flex items-center justify-center group-hover:bg-gray-100 transition-colors">
         <img 
-          key={displayImage} // Force re-render for transition if needed, though mostly handled by CSS
           src={displayImage} 
           alt={product.name} 
-          className="w-full h-full object-contain group-hover:scale-110 transition duration-700 animate-in fade-in" 
+          className="w-full h-full object-contain group-hover:scale-110 transition duration-700 p-2" 
         />
         {/* Quick View Overlay Button */}
         <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[1px]">
@@ -50,59 +62,91 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
             }}
             className="bg-white text-gray-800 px-4 py-2 rounded-full shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all transform translate-y-4 group-hover:translate-y-0 duration-300"
           >
-            <Eye size={14} /> Quick View
+            <Eye size={14} /> ดูตัวอย่าง
           </button>
         </div>
-
-        {product.discount && (
-          <span className="absolute top-0 right-0 bg-red-600 text-white text-[11px] font-black px-3 py-1 rounded-bl-xl shadow-sm">
-            -{product.discount}%
-          </span>
-        )}
       </div>
       
+      {/* Content */}
       <div className="flex-1 flex flex-col">
+        <div className="mb-1">
+           <span className="text-[10px] text-gray-400 font-medium bg-gray-100 px-2 py-0.5 rounded">{product.category}</span>
+        </div>
         <h3 className="text-gray-800 text-sm font-bold line-clamp-2 h-10 mb-2 group-hover:text-[#0056b3] transition-colors leading-relaxed">
           {product.name}
         </h3>
         
-        {product.variants && product.variants.length > 0 && (
-          <div className="mb-4">
-            <p className="text-[10px] text-gray-400 uppercase font-black mb-2 tracking-widest">เลือกตัวเลือก:</p>
-            <div className="flex flex-wrap gap-2">
-              {product.variants.map((variant) => (
-                <button
-                  key={variant.id}
-                  onClick={(e) => handleVariantClick(e, variant)}
-                  className={`text-[11px] px-3 py-1.5 rounded-lg border transition-all duration-300 flex items-center gap-1.5 font-bold ${
-                    selectedVariant?.id === variant.id 
-                      ? 'bg-blue-600 border-blue-600 text-white shadow-md ring-4 ring-blue-100' 
-                      : 'bg-white border-gray-200 text-gray-600 hover:border-blue-400 hover:text-blue-600'
-                  }`}
-                >
-                  {selectedVariant?.id === variant.id && <Check size={12} />}
-                  {variant.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="mb-4 mt-auto">
-          <div className="flex items-baseline gap-2">
-            <span className="text-[#0056b3] text-2xl font-black">฿{displayPrice.toLocaleString()}</span>
-            {product.originalPrice && product.originalPrice > displayPrice && (
-              <span className="text-gray-400 text-xs line-through italic font-medium">฿{product.originalPrice.toLocaleString()}</span>
+        {/* Variant Selection */}
+        {hasVariants ? (
+          <div className="mb-3 h-8">
+            {product.variants!.length > 4 ? (
+               <div className="relative" onClick={e => e.stopPropagation()}>
+                  <select 
+                    className="w-full text-[11px] border border-gray-200 rounded-lg py-1.5 pl-2 pr-6 appearance-none bg-gray-50 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer text-gray-700 font-medium"
+                    onChange={(e) => {
+                       const v = product.variants!.find(v => v.id === e.target.value);
+                       setSelectedVariant(v || null);
+                    }}
+                    value={selectedVariant?.id || ""}
+                  >
+                     <option value="">เลือกตัวเลือก ({product.variants!.length})</option>
+                     {product.variants!.map(v => (
+                        <option key={v.id} value={v.id}>{v.name}</option>
+                     ))}
+                  </select>
+                  <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+               </div>
+            ) : (
+                <div className="flex flex-wrap gap-1.5" onClick={e => e.stopPropagation()}>
+                    {product.variants!.map(variant => (
+                        <button 
+                            key={variant.id}
+                            onClick={() => setSelectedVariant(variant)}
+                             className={`text-[10px] px-2 py-1 rounded-md border transition-all font-bold ${
+                                selectedVariant?.id === variant.id 
+                                ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
+                                : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'
+                             }`}
+                        >
+                            {variant.name}
+                        </button>
+                    ))}
+                </div>
             )}
           </div>
-          {!selectedVariant && product.variants && product.variants.length > 0 && (
-             <span className="text-[10px] text-blue-500 font-bold uppercase tracking-tighter">ราคาเริ่มต้น</span>
-          )}
+        ) : (
+           <div className="mb-3 h-8" />
+        )}
+
+        {/* Price */}
+        <div className="mb-3 mt-auto flex items-end justify-between">
+          <div className="flex flex-col">
+            <div className="flex items-baseline gap-2">
+              <span className="text-[#0056b3] text-lg font-black">฿{displayPrice.toLocaleString()}</span>
+              {product.originalPrice && product.originalPrice > displayPrice && (
+                <span className="text-gray-400 text-[10px] line-through font-medium">฿{product.originalPrice.toLocaleString()}</span>
+              )}
+            </div>
+            {!selectedVariant && hasVariants && (
+               <span className="text-[9px] text-orange-500 font-bold">ราคาเริ่มต้น</span>
+            )}
+          </div>
         </div>
       </div>
 
-      <button className="w-full bg-[#0056b3] text-white hover:bg-blue-700 transition rounded-xl py-3 text-sm font-black shadow-lg hover:shadow-blue-100 flex items-center justify-center gap-2 group/btn active:scale-95">
-        <ShoppingCart size={18} className="group-hover/btn:animate-bounce" /> เพิ่มลงตะกร้า
+      <button 
+        onClick={(e) => {
+           e.stopPropagation();
+           alert(`เพิ่ม ${product.name} ${selectedVariant ? `(${selectedVariant.name})` : ''} ลงตะกร้า`);
+        }}
+        className={`w-full transition rounded-xl py-2.5 text-sm font-bold shadow-sm flex items-center justify-center gap-2 active:scale-95 ${
+            hasVariants && !selectedVariant 
+            ? 'bg-blue-50 text-blue-600 hover:bg-blue-100' 
+            : 'bg-[#0056b3] text-white hover:bg-blue-700 hover:shadow-blue-100'
+        }`}
+      >
+        <ShoppingCart size={16} /> 
+        {hasVariants && !selectedVariant ? 'เลือกตัวเลือก' : 'เพิ่มลงตะกร้า'}
       </button>
     </div>
   );
@@ -166,7 +210,7 @@ const ProductQuickViewModal: React.FC<{ product: Product | null; onClose: () => 
                 {product.variants.map((v) => (
                   <button 
                     key={v.id} 
-                    onClick={() => setSelectedVariant(selectedVariant?.id === v.id ? null : v)}
+                    onClick={() => setSelectedVariant(v)}
                     className={`px-4 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${selectedVariant?.id === v.id ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-md ring-4 ring-blue-50' : 'border-gray-100 hover:border-gray-300 text-gray-600'}`}
                   >
                     {v.name}
@@ -203,7 +247,7 @@ const ProductQuickViewModal: React.FC<{ product: Product | null; onClose: () => 
   );
 };
 
-export const HomePage: React.FC = () => {
+export const HomePage: React.FC<HomePageProps> = ({ onProductClick }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [currentView, setCurrentView] = useState<'landing' | 'all-products'>('landing');
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
@@ -234,7 +278,12 @@ export const HomePage: React.FC = () => {
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
             {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} onQuickView={setQuickViewProduct} />
+              <ProductCard 
+                key={product.id} 
+                product={product} 
+                onQuickView={setQuickViewProduct} 
+                onClick={onProductClick}
+              />
             ))}
           </div>
         </div>
@@ -260,7 +309,12 @@ export const HomePage: React.FC = () => {
          </div>
          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
            {products.slice(0, 10).map((product) => (
-              <ProductCard key={product.id} product={product} onQuickView={setQuickViewProduct} />
+              <ProductCard 
+                key={product.id} 
+                product={product} 
+                onQuickView={setQuickViewProduct} 
+                onClick={onProductClick}
+              />
            ))}
          </div>
       </div>
@@ -295,7 +349,12 @@ export const HomePage: React.FC = () => {
 
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
         {products.map((product) => (
-          <ProductCard key={product.id} product={product} onQuickView={setQuickViewProduct} />
+          <ProductCard 
+            key={product.id} 
+            product={product} 
+            onQuickView={setQuickViewProduct} 
+            onClick={onProductClick}
+          />
         ))}
       </div>
       
