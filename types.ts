@@ -74,9 +74,11 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  password?: string;
   role: 'CUSTOMER' | 'ADMIN';
   image?: string;
   createdAt: string;
+  dashboardConfig?: any[];
 }
 
 export interface OrderItem {

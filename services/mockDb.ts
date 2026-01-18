@@ -182,6 +182,20 @@ export const INITIAL_PAGES: Page[] = [
 
 // Mock Users
 export const INITIAL_USERS: User[] = [
+  { 
+    id: 'u-admin', 
+    name: 'Super Admin', 
+    email: 'admin@example.com', 
+    password: '$2a$10$mockhashedpasswordforadmin123', // Simulated hash
+    role: 'ADMIN', 
+    image: 'https://ui-avatars.com/api/?name=Super+Admin&background=0D8ABC&color=fff', 
+    createdAt: new Date().toISOString(),
+    dashboardConfig: [
+       { i: "sales", x: 0, y: 0, w: 4, h: 2 },
+       { i: "orders", x: 4, y: 0, w: 4, h: 2 },
+       { i: "lowstock", x: 8, y: 0, w: 4, h: 2 },
+    ]
+  },
   { id: 'u1', name: 'John Doe', email: 'john@example.com', role: 'ADMIN', image: 'https://i.pravatar.cc/150?u=u1', createdAt: new Date().toISOString() },
   { id: 'u2', name: 'Jane Smith', email: 'jane@example.com', role: 'CUSTOMER', image: 'https://i.pravatar.cc/150?u=u2', createdAt: new Date().toISOString() },
 ];

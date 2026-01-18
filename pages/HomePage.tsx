@@ -16,16 +16,28 @@ interface HomePageProps {
 
 const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => void; onClick?: (p: Product) => void }> = ({ product, onQuickView, onClick }) => {
   const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
+  const [hoveredVariant, setHoveredVariant] = useState<ProductVariant | null>(null);
 
-  const displayPrice = selectedVariant ? selectedVariant.price : product.price;
-  const displayImage = selectedVariant?.image ? selectedVariant.image : product.image;
+  // Determine what to show: Hover takes precedence for preview, then Selected, then Default
+  const activeVariant = hoveredVariant || selectedVariant;
+  
+  const displayPrice = activeVariant ? activeVariant.price : product.price;
+  const displayImage = activeVariant?.image ? activeVariant.image : product.image;
   const hasVariants = product.variants && product.variants.length > 0;
   
+  // Determine if we should show image thumbnails for variants
+  const showVariantThumbnails = hasVariants && product.variants!.some(v => v.image);
+  
   // Calculate stock based on selection or aggregate
-  const currentStock = selectedVariant ? selectedVariant.stock : product.stock;
+  const currentStock = activeVariant ? activeVariant.stock : product.stock;
+
+  // Calculate dynamic discount based on current display price
+  const discountPercent = product.originalPrice && product.originalPrice > displayPrice
+    ? Math.round(((product.originalPrice - displayPrice) / product.originalPrice) * 100)
+    : 0;
 
   const getStockStatus = (stock: number) => {
-    if (stock === 0) return { label: 'สินค้าหมด', color: 'text-gray-500 bg-gray-100 border-gray-200', dot: 'bg-gray-400' };
+    if (stock === 0) return { label: 'สินค้าหมด', color: 'text-gray-400 bg-gray-100 border-gray-200', dot: 'bg-gray-400' };
     if (stock < 5) return { label: `เหลือ ${stock} ชิ้น`, color: 'text-red-600 bg-red-50 border-red-100', dot: 'bg-red-500 animate-pulse' };
     return { label: 'มีสินค้า', color: 'text-green-600 bg-green-50 border-green-100', dot: 'bg-green-500' };
   };
@@ -51,9 +63,9 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
         )}
       </div>
       
-      {product.discount && (
+      {discountPercent > 0 && (
           <span className="absolute top-3 right-3 z-10 bg-red-600 text-white text-[11px] font-black px-2 py-1 rounded-lg shadow-sm transform group-hover:scale-110 transition-transform">
-            -{product.discount}%
+            -{discountPercent}%
           </span>
       )}
       
@@ -92,21 +104,21 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
         </h3>
         
         {/* Stock Status Indicator */}
-        <div className="mb-3">
-           <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border ${stockInfo.color}`}>
+        <div className="mb-3 h-6">
+           <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors duration-300 ${stockInfo.color}`}>
               <div className={`w-1.5 h-1.5 rounded-full ${stockInfo.dot}`}></div>
               {stockInfo.label}
            </div>
         </div>
 
-        {/* Variant Selector (if applicable) */}
+        {/* Variant Selector */}
         <div className="mt-auto">
           {hasVariants ? (
-            <div className="mb-3 h-8">
-              {product.variants!.length > 4 ? (
-                 <div className="relative" onClick={e => e.stopPropagation()}>
+            <div className="mb-3 min-h-[36px]" onClick={e => e.stopPropagation()}>
+              {!showVariantThumbnails && product.variants!.length > 6 ? (
+                 <div className="relative">
                     <select 
-                      className="w-full text-[11px] border border-gray-200 rounded-lg py-1.5 pl-2 pr-6 appearance-none bg-gray-50 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer text-gray-700 font-medium"
+                      className="w-full text-[11px] border border-gray-200 rounded-lg py-1.5 pl-2 pr-6 appearance-none bg-gray-50 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer text-gray-700 font-medium transition-shadow hover:shadow-sm"
                       onChange={(e) => {
                          const v = product.variants!.find(v => v.id === e.target.value);
                          setSelectedVariant(v || null);
@@ -121,45 +133,76 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
                     <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                  </div>
               ) : (
-                  <div className="flex flex-wrap gap-1.5" onClick={e => e.stopPropagation()}>
+                  <div className="flex flex-wrap gap-2">
                       {product.variants!.map(variant => (
                           <button 
                               key={variant.id}
                               onClick={() => setSelectedVariant(variant)}
-                               className={`text-[10px] px-2 py-1 rounded-md border transition-all font-bold ${
+                              onMouseEnter={() => setHoveredVariant(variant)}
+                              onMouseLeave={() => setHoveredVariant(null)}
+                               className={`group relative rounded-lg transition-all duration-200 border-2 overflow-hidden ${
                                   selectedVariant?.id === variant.id 
-                                  ? 'bg-blue-600 text-white border-blue-600 shadow-sm' 
-                                  : 'bg-white text-gray-600 border-gray-200 hover:border-blue-400 hover:text-blue-600'
-                               }`}
+                                  ? 'border-blue-600 shadow-md ring-1 ring-blue-200' 
+                                  : 'border-transparent hover:border-blue-200 bg-gray-100'
+                               } ${showVariantThumbnails && variant.image ? 'w-9 h-9 p-0.5' : 'px-2 py-1'}`}
+                               title={variant.name}
                           >
-                              {variant.name}
+                              {showVariantThumbnails && variant.image ? (
+                                <>
+                                  <img 
+                                      src={variant.image} 
+                                      alt={variant.name} 
+                                      className="w-full h-full object-cover rounded-md" 
+                                  />
+                                  {selectedVariant?.id === variant.id && (
+                                    <div className="absolute inset-0 bg-blue-600/20 flex items-center justify-center backdrop-blur-[0.5px]">
+                                      <div className="bg-blue-600 rounded-full p-0.5 shadow-sm">
+                                        <Check size={8} className="text-white" strokeWidth={4} />
+                                      </div>
+                                    </div>
+                                  )}
+                                </>
+                              ) : (
+                                  <span className={`text-[10px] font-bold block whitespace-nowrap ${selectedVariant?.id === variant.id ? 'text-blue-700' : 'text-gray-600'}`}>
+                                      {variant.name}
+                                  </span>
+                              )}
                           </button>
                       ))}
                   </div>
               )}
             </div>
           ) : (
-             <div className="mb-3 h-8" /> 
+             <div className="mb-3 min-h-[36px]" /> 
           )}
 
           {/* Price & Cart Actions */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex flex-col">
-              <div className="flex items-baseline gap-1.5">
-                <span className="text-[#0056b3] text-lg font-black">฿{displayPrice.toLocaleString()}</span>
+              <div className="flex items-baseline gap-1.5 h-7">
+                <span className="text-[#0056b3] text-lg font-black transition-all duration-300 transform">
+                  ฿{displayPrice.toLocaleString()}
+                </span>
                 {product.originalPrice && product.originalPrice > displayPrice && (
                   <span className="text-gray-300 text-[10px] line-through font-medium">฿{product.originalPrice.toLocaleString()}</span>
                 )}
               </div>
-              {!selectedVariant && hasVariants && (
-                 <span className="text-[9px] text-orange-500 font-bold -mt-1">ราคาเริ่มต้น</span>
+              {!selectedVariant && hasVariants && !hoveredVariant && (
+                 <span className="text-[9px] text-orange-500 font-bold -mt-1 animate-pulse">ราคาเริ่มต้น</span>
               )}
             </div>
 
             <button 
               onClick={(e) => {
                  e.stopPropagation();
-                 if (currentStock > 0 && (!hasVariants || selectedVariant)) {
+                 if (currentStock > 0) {
+                    if (hasVariants && !selectedVariant) {
+                       // If variants exist but none selected, maybe prompt or just add default?
+                       // For UX, better to open QuickView or require selection.
+                       // Here we'll just alert for demo.
+                       alert('กรุณาเลือกแบบสินค้าก่อน');
+                       return;
+                    }
                     alert(`เพิ่ม ${product.name} ${selectedVariant ? `(${selectedVariant.name})` : ''} ลงตะกร้า`);
                  }
               }}
@@ -191,6 +234,9 @@ const ProductQuickViewModal: React.FC<{ product: Product | null; onClose: () => 
 
   // Use real description if available, otherwise fallback
   const description = product.description || `พบกับนวัตกรรมใหม่แห่งการอยู่อาศัย ด้วย ${product.name} ที่ได้รับการออกแบบมาอย่างพิถีพิถัน เพื่อตอบโจทย์ทุกความต้องการของบ้านคุณ สินค้าคุณภาพสูงในหมวด ${product.category} มั่นใจได้ในความทนทานและประสิทธิภาพการใช้งานที่ยาวนาน`;
+
+  // Determine if we should show image thumbnails for variants in Modal
+  const showVariantThumbnails = product.variants?.some(v => v.image);
 
   return (
     <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
@@ -249,9 +295,25 @@ const ProductQuickViewModal: React.FC<{ product: Product | null; onClose: () => 
                   <button 
                     key={v.id} 
                     onClick={() => setSelectedVariant(v)}
-                    className={`px-4 py-2.5 rounded-xl border-2 font-bold text-sm transition-all ${selectedVariant?.id === v.id ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-md ring-4 ring-blue-50' : 'border-gray-100 hover:border-gray-300 text-gray-600'}`}
+                    className={`
+                        relative transition-all duration-200 border-2
+                        ${showVariantThumbnails && v.image ? 'w-16 h-16 rounded-xl p-1' : 'px-4 py-2.5 rounded-xl font-bold text-sm'}
+                        ${selectedVariant?.id === v.id 
+                            ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-md ring-2 ring-blue-100' 
+                            : 'border-gray-100 hover:border-gray-300 text-gray-600'}
+                    `}
+                    title={v.name}
                   >
-                    {v.name}
+                    {showVariantThumbnails && v.image ? (
+                        <>
+                            <img src={v.image} alt={v.name} className="w-full h-full object-cover rounded-lg" />
+                            {selectedVariant?.id === v.id && (
+                                <div className="absolute top-0 right-0 bg-blue-600 text-white rounded-bl-lg rounded-tr-sm p-0.5">
+                                    <Check size={10} />
+                                </div>
+                            )}
+                        </>
+                    ) : v.name}
                   </button>
                 ))}
               </div>
