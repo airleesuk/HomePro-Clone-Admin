@@ -1,7 +1,15 @@
-import React from 'react';
-import { CATEGORIES } from '../services/mockDb';
+
+import React, { useEffect, useState } from 'react';
+import { db } from '../services/mockDb';
+import { Category } from '../types';
 
 export const CategorySection: React.FC = () => {
+  const [categories, setCategories] = useState<Category[]>([]);
+
+  useEffect(() => {
+    setCategories(db.getCategories());
+  }, []);
+
   return (
     <div className="container mx-auto px-4 py-8">
        {/* Trending Section */}
@@ -40,7 +48,7 @@ export const CategorySection: React.FC = () => {
        <div>
           <h2 className="text-xl md:text-2xl font-bold text-[#0056b3] mb-4">หมวดหมู่สินค้า</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-3">
-             {CATEGORIES.map(cat => (
+             {categories.map(cat => (
                <div key={cat.id} className="bg-white border rounded-lg p-4 flex flex-col items-center justify-center gap-3 hover:shadow-lg transition cursor-pointer group h-32">
                   <div className="w-12 h-12 rounded-full overflow-hidden bg-gray-50 group-hover:scale-110 transition">
                      <img src={cat.icon} alt={cat.name} className="w-full h-full object-cover"/>

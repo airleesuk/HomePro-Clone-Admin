@@ -6,7 +6,7 @@ import {
   Plus, Edit, Trash2, Search, ArrowUp, ArrowDown, X, Layout,
   Zap, Droplets, Wrench, Grid, HardHat, Lightbulb, FlaskConical, Database, 
   Utensils, Snowflake, Gauge, Bath, Truck, Recycle, Waves, GlassWater, 
-  ArrowDownToLine, Filter, Box, Settings 
+  ArrowDownToLine, Filter, Box, Settings, GripVertical 
 } from 'lucide-react';
 import { ImageManager } from './ImageManager';
 import { MegaMenuEditModal } from './MegaMenuEditModal';
@@ -42,18 +42,19 @@ export const CategoryManager: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
   
-  // Extended state to include promo fields
-  const [formData, setFormData] = useState<Partial<Category> & { promoText?: string; promoImg?: string }>({
+  // Basic Category Form Data
+  const [formData, setFormData] = useState<Partial<Category>>({
     name: '',
     icon: '',
-    iconKey: 'box',
-    promoText: '',
-    promoImg: ''
+    iconKey: 'box'
   });
 
   // Mega Menu Edit Modal
   const [isMegaMenuModalOpen, setIsMegaMenuModalOpen] = useState(false);
   const [megaMenuCategory, setMegaMenuCategory] = useState<Category | null>(null);
+
+  // DnD State
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
 
   useEffect(() => {
     refreshData();
@@ -76,16 +77,11 @@ export const CategoryManager: React.FC = () => {
 
   const handleEdit = (category: Category) => {
     setEditingCategory(category);
-    
-    // Fetch Mega Menu details to populate promo fields
-    const detail = db.getCategoryDetail(category.id);
-    
     setFormData({
-      ...category,
-      promoText: detail?.promoText || '',
-      promoImg: detail?.promoImg || ''
+      name: category.name,
+      icon: category.icon,
+      iconKey: category.iconKey
     });
-    
     setIsModalOpen(true);
   };
 
@@ -94,9 +90,7 @@ export const CategoryManager: React.FC = () => {
     setFormData({ 
       name: '', 
       icon: 'https://via.placeholder.com/150x150.png?text=New+Category', 
-      iconKey: 'box',
-      promoText: '',
-      promoImg: ''
+      iconKey: 'box'
     });
     setIsModalOpen(true);
   };
@@ -105,42 +99,16 @@ export const CategoryManager: React.FC = () => {
     e.preventDefault();
     
     if (editingCategory) {
-      // 1. Update Basic Category Info
+      // Update Basic Category Info
       db.updateCategory({ 
         ...editingCategory, 
         name: formData.name!,
         icon: formData.icon!,
         iconKey: formData.iconKey 
       });
-
-      // 2. Update Mega Menu Details (Promo Info)
-      const existingDetail = db.getCategoryDetail(editingCategory.id);
-      
-      const detailToSave = existingDetail ? {
-          ...existingDetail,
-          name: formData.name!, // Keep name synced
-          iconKey: formData.iconKey || existingDetail.iconKey,
-          promoText: formData.promoText || '',
-          promoImg: formData.promoImg || ''
-      } : {
-          // Create new detail structure if missing
-          id: editingCategory.id,
-          name: formData.name!,
-          iconKey: formData.iconKey || 'box',
-          highlights: [],
-          subCategories: [],
-          promoText: formData.promoText || '',
-          promoImg: formData.promoImg || ''
-      };
-      
-      db.updateCategoryDetail(detailToSave);
-
     } else {
       // Add new category
       db.addCategory(formData as Category);
-      // Note: Promo info for new categories isn't saved immediately in this mock implementation
-      // because we don't get the generated ID back synchronously in a clean way without refactoring.
-      // Users can edit the category after creation to add promo info.
     }
     
     setIsModalOpen(false);
@@ -159,7 +127,36 @@ export const CategoryManager: React.FC = () => {
     if (targetIndex >= 0 && targetIndex < newCategories.length) {
       [newCategories[index], newCategories[targetIndex]] = [newCategories[targetIndex], newCategories[index]];
       setCategories(newCategories);
+      db.reorderCategories(newCategories);
     }
+  };
+
+  // DnD Handlers
+  const handleDragStart = (e: React.DragEvent, index: number) => {
+    setDraggedIndex(index);
+    // Required for Firefox
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", index.toString());
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault(); // Necessary to allow dropping
+    if (draggedIndex === null || draggedIndex === index) return;
+    
+    // Optimistic UI update
+    const newCategories = [...categories];
+    const draggedItem = newCategories[draggedIndex];
+    newCategories.splice(draggedIndex, 1);
+    newCategories.splice(index, 0, draggedItem);
+    
+    setCategories(newCategories);
+    setDraggedIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedIndex(null);
+    // Persist new order to DB
+    db.reorderCategories(categories);
   };
 
   return (
@@ -196,8 +193,18 @@ export const CategoryManager: React.FC = () => {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {filteredCategories.map((cat, index) => (
-              <tr key={cat.id} className="hover:bg-gray-50/50 transition">
-                <td className="p-4 text-center text-gray-400 font-mono">#{index + 1}</td>
+              <tr 
+                key={cat.id} 
+                className={`transition ${draggedIndex === index ? 'bg-blue-50' : 'hover:bg-gray-50/50'}`}
+                draggable={!searchQuery} // Disable DnD when filtering
+                onDragStart={(e) => handleDragStart(e, index)}
+                onDragOver={(e) => handleDragOver(e, index)}
+                onDragEnd={handleDragEnd}
+              >
+                <td className="p-4 text-center text-gray-400 font-mono flex items-center justify-center gap-2 h-full">
+                  {!searchQuery && <GripVertical size={16} className="text-gray-300 cursor-grab active:cursor-grabbing" />}
+                  #{index + 1}
+                </td>
                 <td className="p-4">
                   <div className="flex items-center gap-3">
                     {/* Category Image */}
@@ -298,34 +305,6 @@ export const CategoryManager: React.FC = () => {
                     label="รูปภาพไอคอน (Icon Image)"
                     multiple={false}
                  />
-              </div>
-
-              {/* Promo Section embedded in Basic Edit */}
-              <div className="pt-4 border-t border-gray-100 mt-4">
-                 <h4 className="font-bold text-gray-800 mb-3 text-sm flex items-center gap-2">
-                    <Layout size={16} className="text-purple-600"/> การตั้งค่า Mega Menu (Promo)
-                 </h4>
-                 
-                 <div className="space-y-4">
-                    <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase mb-1">ข้อความโปรโมชั่น</label>
-                        <textarea 
-                          value={formData.promoText} 
-                          onChange={e => setFormData({...formData, promoText: e.target.value})} 
-                          className="w-full border rounded-xl p-3 focus:ring-2 focus:ring-purple-500 outline-none text-sm h-24" 
-                          placeholder="ข้อความที่จะแสดงในส่วนโปรโมชั่นของเมนู..."
-                        />
-                    </div>
-                    
-                    <div>
-                        <ImageManager 
-                           images={formData.promoImg ? [formData.promoImg] : []}
-                           onChange={(newImages) => setFormData({...formData, promoImg: newImages[0] || ''})}
-                           label="รูปภาพโปรโมชั่น (Promo Image)"
-                           multiple={false}
-                        />
-                    </div>
-                 </div>
               </div>
 
               <div className="pt-4 flex justify-end gap-3 shrink-0">

@@ -3,11 +3,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, ShoppingCart, User, Heart, Bell, Menu, MapPin, Truck, ChevronDown, ArrowLeft, X } from 'lucide-react';
 import { MegaMenu } from './MegaMenu';
 
+interface NavSubLink {
+  label: string;
+  slug?: string; // If present, it's a page
+}
+
 interface NavLink {
   label: string;
   href: string;
   isPromo?: boolean;
-  subLinks?: string[];
+  subLinks?: (string | NavSubLink)[]; // Allow both strings (legacy) and objects
 }
 
 const NAV_LINKS: NavLink[] = [
@@ -17,9 +22,14 @@ const NAV_LINKS: NavLink[] = [
   { 
     label: 'บริการงานระบบ', 
     href: '#', 
-    subLinks: ['บริการติดตั้งแทงค์น้ำ', 'บริการติดตั้งปั๊มน้ำ', 'บริการล้างถังเก็บน้ำ', 'งานเดินท่อประปา'] 
+    subLinks: [
+      { label: 'บริการติดตั้งแทงค์น้ำ', slug: 'installation-service' },
+      { label: 'บริการติดตั้งปั๊มน้ำ', slug: 'pump-service' }, // Mock slugs
+      { label: 'บริการล้างถังเก็บน้ำ', slug: 'cleaning-service' },
+      { label: 'งานเดินท่อประปา', slug: 'plumbing-service' }
+    ]
   },
-  { label: 'บทความสาระน่ารู้', href: '#' },
+  { label: 'เกี่ยวกับเรา', href: '#', subLinks: [{label: 'ประวัติความเป็นมา', slug: 'about-us'}] },
   { label: 'ติดต่อเรา', href: '#' },
 ];
 
@@ -78,6 +88,14 @@ export const Header: React.FC = () => {
             setActiveDropdown(null);
         }
     }, 100);
+  };
+
+  const handlePageNavigation = (slug?: string) => {
+    if (slug) {
+      // Dispatch custom event for App.tsx to listen
+      window.dispatchEvent(new CustomEvent('navigate-page', { detail: { slug } }));
+      setActiveDropdown(null);
+    }
   };
 
   return (
@@ -284,15 +302,25 @@ export const Header: React.FC = () => {
                  </a>
                  
                  {link.subLinks && activeDropdown === link.label && (
-                   <div className="absolute top-full left-0 w-56 bg-white shadow-2xl rounded-b-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-[60]">
+                   <div className="absolute top-full left-0 w-64 bg-white shadow-2xl rounded-b-xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 z-[60]">
                      <ul className="py-2" role="menu" aria-label={link.label}>
-                       {link.subLinks.map((sub, i) => (
-                         <li key={i} role="none">
-                            <a href="#" className="block px-4 py-2.5 text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors cursor-pointer text-sm font-medium border-l-2 border-transparent hover:border-blue-500 focus:bg-gray-50 focus:border-blue-500 outline-none" role="menuitem">
-                              {sub}
-                            </a>
-                         </li>
-                       ))}
+                       {link.subLinks.map((sub, i) => {
+                         // Type guard/check
+                         const label = typeof sub === 'string' ? sub : sub.label;
+                         const slug = typeof sub === 'string' ? undefined : sub.slug;
+                         
+                         return (
+                           <li key={i} role="none">
+                              <button 
+                                onClick={() => handlePageNavigation(slug)}
+                                className="block w-full text-left px-4 py-2.5 text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors cursor-pointer text-sm font-medium border-l-2 border-transparent hover:border-blue-500 focus:bg-gray-50 focus:border-blue-500 outline-none" 
+                                role="menuitem"
+                              >
+                                {label}
+                              </button>
+                           </li>
+                         );
+                       })}
                      </ul>
                    </div>
                  )}

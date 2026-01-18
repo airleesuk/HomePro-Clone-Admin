@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Save, X, Plus, ArrowLeft, ArrowRight, Trash2, Layout, GripVertical, Minus } from 'lucide-react';
+import { Save, X, Plus, ArrowLeft, ArrowRight, Trash2, Layout, GripVertical, MoveUp, MoveDown } from 'lucide-react';
 import { Category, CategoryDetail } from '../../types';
 import { db } from '../../services/mockDb';
 import { ImageManager } from './ImageManager';
@@ -18,7 +18,12 @@ export const MegaMenuEditModal: React.FC<MegaMenuEditModalProps> = ({ isOpen, on
   useEffect(() => {
     if (isOpen && category) {
       const existing = db.getCategoryDetail(category.id);
-      const detail: CategoryDetail = existing ? { ...existing } : {
+      const detail: CategoryDetail = existing ? { 
+        ...existing,
+        // Ensure arrays are initialized even if missing in stored data
+        highlights: Array.isArray(existing.highlights) ? existing.highlights : [],
+        subCategories: Array.isArray(existing.subCategories) ? existing.subCategories : []
+      } : {
         id: category.id,
         name: category.name,
         iconKey: category.iconKey || 'box',
@@ -153,6 +158,19 @@ export const MegaMenuEditModal: React.FC<MegaMenuEditModalProps> = ({ isOpen, on
     setEditingDetail({ ...editingDetail, subCategories: newSubs });
   };
 
+  const moveSubCategoryItem = (subIndex: number, itemIndex: number, direction: 'up' | 'down') => {
+    if (!editingDetail) return;
+    const newSubs = [...editingDetail.subCategories];
+    const newItems = [...newSubs[subIndex].items];
+    const targetIndex = direction === 'up' ? itemIndex - 1 : itemIndex + 1;
+    
+    if (targetIndex >= 0 && targetIndex < newItems.length) {
+      [newItems[itemIndex], newItems[targetIndex]] = [newItems[targetIndex], newItems[itemIndex]];
+      newSubs[subIndex] = { ...newSubs[subIndex], items: newItems };
+      setEditingDetail({ ...editingDetail, subCategories: newSubs });
+    }
+  };
+
   if (!isOpen || !editingDetail) return null;
 
   return (
@@ -249,7 +267,10 @@ export const MegaMenuEditModal: React.FC<MegaMenuEditModalProps> = ({ isOpen, on
                       <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
                          {sub.items.map((item, itemIdx) => (
                            <div key={itemIdx} className="flex gap-1 items-center group/item">
-                              <div className="cursor-grab text-gray-300 hover:text-gray-500"><GripVertical size={12}/></div>
+                              <div className="flex flex-col text-gray-300">
+                                 <button onClick={() => moveSubCategoryItem(idx, itemIdx, 'up')} disabled={itemIdx === 0} className="hover:text-purple-600 disabled:opacity-20"><MoveUp size={10}/></button>
+                                 <button onClick={() => moveSubCategoryItem(idx, itemIdx, 'down')} disabled={itemIdx === sub.items.length - 1} className="hover:text-purple-600 disabled:opacity-20"><MoveDown size={10}/></button>
+                              </div>
                               <input 
                                 value={item}
                                 onChange={(e) => updateSubCategoryItem(idx, itemIdx, e.target.value)}

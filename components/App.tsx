@@ -1,14 +1,39 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { HomePage } from '../pages/HomePage';
 import { AdminPage } from '../pages/AdminPage';
 import { ProductDetailPage } from '../pages/ProductDetailPage';
-import { ViewMode, Product } from '../types';
+import { ContentPage } from '../pages/ContentPage';
+import { ViewMode, Product, Page } from '../types';
 import { Settings } from 'lucide-react';
+import { db } from '../services/mockDb';
 
 const App: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>(ViewMode.CLIENT);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedPage, setSelectedPage] = useState<Page | null>(null);
+
+  useEffect(() => {
+    // Listen for custom navigation events from Header
+    const handleNavigation = (e: CustomEvent) => {
+      if (e.detail.slug) {
+        const page = db.getPages().find(p => p.slug === e.detail.slug);
+        if (page) {
+          setSelectedPage(page);
+          setViewMode(ViewMode.PAGE_VIEW);
+          window.scrollTo(0, 0);
+        } else {
+          console.warn(`Page not found: ${e.detail.slug}`);
+          // Fallback or show 404
+        }
+      }
+    };
+
+    window.addEventListener('navigate-page', handleNavigation as EventListener);
+    return () => {
+      window.removeEventListener('navigate-page', handleNavigation as EventListener);
+    };
+  }, []);
 
   const handleProductClick = (product: Product) => {
     setSelectedProduct(product);
@@ -18,6 +43,7 @@ const App: React.FC = () => {
 
   const handleBackToHome = () => {
     setSelectedProduct(null);
+    setSelectedPage(null);
     setViewMode(ViewMode.CLIENT);
   };
 
@@ -52,6 +78,13 @@ const App: React.FC = () => {
           product={selectedProduct} 
           onBack={handleBackToHome} 
           onProductClick={handleProductClick}
+        />
+      )}
+
+      {viewMode === ViewMode.PAGE_VIEW && selectedPage && (
+        <ContentPage 
+          page={selectedPage} 
+          onNavigate={handleBackToHome}
         />
       )}
     </>

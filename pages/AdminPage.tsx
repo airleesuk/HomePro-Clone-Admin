@@ -7,22 +7,26 @@ import { BrandManager } from '../components/admin/BrandManager';
 import { ImageManager } from '../components/admin/ImageManager';
 import { BannerManager } from '../components/admin/BannerManager';
 import { PageBuilder } from '../components/admin/PageBuilder';
+import { DatabaseManager } from '../components/admin/DatabaseManager';
+import { KeywordUrlGenerator } from '../components/admin/KeywordUrlGenerator';
 import { 
   Package, Settings, Plus, Trash2, Edit, Save, X, Search, 
   ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, 
   Filter, Zap, Layers, Star, 
   AlertCircle, XCircle, Bell, Grid as GridIcon, Tag,
   ZapOff, StarOff, Layout, FileText, Image as ImageIcon,
-  PenTool, Mail, FormInput, FileBox, AlignLeft, Menu, Briefcase
+  PenTool, Mail, FormInput, FileBox, AlignLeft, Menu, Briefcase,
+  Database, Globe
 } from 'lucide-react';
 
 export const AdminPage: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'brands' | 'settings' | 'banners' | 'templates' | 'layouts' | 'pagebuilder' | 'blocks' | 'content' | 'forms' | 'emails'>('products');
+  const [activeTab, setActiveTab] = useState<'products' | 'categories' | 'brands' | 'settings' | 'banners' | 'templates' | 'layouts' | 'pagebuilder' | 'blocks' | 'content' | 'forms' | 'emails' | 'database' | 'seo'>('products');
   
   // Data State
   const [products, setProducts] = useState<Product[]>([]);
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [totalProductsCount, setTotalProductsCount] = useState(0); // New state for total count
   
   // UI State
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -64,26 +68,42 @@ export const AdminPage: React.FC = () => {
   const [variantErrors, setVariantErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    refreshData();
-  }, []);
+    fetchProducts();
+  }, [productSearchQuery, selectedCategory, stockFilter, typeFilter, brandFilter, sortConfig, productPage]);
+
 
   useEffect(() => {
     generateNotifications();
   }, [products]);
 
+  // Reset page when filters change
   useEffect(() => {
     setProductPage(1);
   }, [productSearchQuery, selectedCategory, stockFilter, typeFilter, brandFilter]);
 
-  const refreshData = () => {
-    setProducts([...db.getProducts()]);
+  const fetchProducts = () => {
+    if (activeTab !== 'products') return;
+
+    const { products: fetchedProducts, totalCount } = db.queryProducts({
+      searchQuery: productSearchQuery,
+      categoryFilter: selectedCategory,
+      stockFilter: stockFilter,
+      typeFilter: typeFilter,
+      brandFilter: brandFilter,
+      sortKey: sortConfig?.key,
+      sortDirection: sortConfig?.direction,
+      page: productPage,
+      itemsPerPage: itemsPerPage,
+    });
+    setProducts(fetchedProducts);
+    setTotalProductsCount(totalCount);
   };
 
   const generateNotifications = () => {
     const newNotifications: AdminNotification[] = [];
     
-    // Check low stock
-    products.forEach(p => {
+    // Check low stock from ALL products, not just the paginated view
+    db.getProducts().forEach(p => {
       if (p.stock < 5) {
         newNotifications.push({
           id: `low-stock-${p.id}`,
@@ -112,56 +132,14 @@ export const AdminPage: React.FC = () => {
     }
     return sortConfig.direction === 'asc' ? <ArrowUp size={14} className="text-blue-600" /> : <ArrowDown size={14} className="text-blue-600" />;
   };
-
-  const processedProducts = useMemo(() => {
-    let result = products.filter(product => {
-      const searchLower = productSearchQuery.toLowerCase().trim();
-      const matchesSearch = 
-        product.name.toLowerCase().includes(searchLower) ||
-        product.category.toLowerCase().includes(searchLower) ||
-        product.id.toString().includes(searchLower);
-        
-      const matchesCategory = selectedCategory === 'All' || product.category === selectedCategory;
-
-      const matchesStock = 
-        stockFilter === 'all' ? true :
-        stockFilter === 'low' ? product.stock > 0 && product.stock < 5 :
-        stockFilter === 'out' ? product.stock === 0 :
-        stockFilter === 'in' ? product.stock >= 5 : true;
-
-      const matchesType = 
-        typeFilter === 'all' ? true :
-        typeFilter === 'flash' ? product.isFlashSale :
-        typeFilter === 'featured' ? product.isFeatured :
-        typeFilter === 'normal' ? !product.isFlashSale && !product.isFeatured : true;
-
-      const matchesBrand = 
-        brandFilter === 'all' ? true :
-        product.brandId?.toString() === brandFilter;
-
-      return matchesSearch && matchesCategory && matchesStock && matchesType && matchesBrand;
-    });
-
-    if (sortConfig !== null) {
-      result.sort((a, b) => {
-        const aValue = a[sortConfig.key];
-        const bValue = b[sortConfig.key];
-        if (aValue === undefined || bValue === undefined) return 0;
-        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-        return 0;
-      });
-    }
-    return result;
-  }, [products, productSearchQuery, selectedCategory, stockFilter, typeFilter, brandFilter, sortConfig]);
-
+  
   const indexOfLastItem = productPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
-  const currentProducts = processedProducts.slice(indexOfFirstItem, indexOfLastItem);
-  const totalPages = Math.ceil(processedProducts.length / itemsPerPage);
+  const totalPages = Math.ceil(totalProductsCount / itemsPerPage);
+
 
   const handleSelectAllOnPage = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const currentPageIds = currentProducts.map(p => p.id);
+    const currentPageIds = products.map(p => p.id);
     if (e.target.checked) {
       const newSelection = Array.from(new Set([...selectedIds, ...currentPageIds]));
       setSelectedIds(newSelection);
@@ -170,14 +148,15 @@ export const AdminPage: React.FC = () => {
     }
   };
 
-  const isAllOnPageSelected = currentProducts.length > 0 && currentProducts.every(p => selectedIds.includes(p.id));
-  const isSomeOnPageSelected = currentProducts.some(p => selectedIds.includes(p.id)) && !isAllOnPageSelected;
+  const isAllOnPageSelected = products.length > 0 && products.every(p => selectedIds.includes(p.id));
+  const isSomeOnPageSelected = products.some(p => selectedIds.includes(p.id)) && !isAllOnPageSelected;
 
   const handleDelete = (id: number) => {
     if (confirm('คุณแน่ใจหรือไม่ที่จะลบสินค้านี้?')) {
       db.deleteProduct(id);
       setSelectedIds(selectedIds.filter(sid => sid !== id));
-      refreshData();
+      fetchProducts();
+      generateNotifications(); 
     }
   };
 
@@ -185,13 +164,16 @@ export const AdminPage: React.FC = () => {
     if (!confirm(`ยืนยันการลบสินค้า ${selectedIds.length} รายการที่เลือกไว้? การกระทำนี้ไม่สามารถย้อนกลับได้`)) return;
     selectedIds.forEach(id => db.deleteProduct(id));
     setSelectedIds([]);
-    refreshData();
+    fetchProducts();
+    generateNotifications();
   };
 
   const handleBulkUpdate = (updates: Partial<Product>, actionName: string) => {
     if (!confirm(`ยืนยันการ "${actionName}" สำหรับสินค้า ${selectedIds.length} รายการ?`)) return;
 
+    // Use db.getProducts() to access all products to ensure we capture IDs not currently on page
     const allProducts = db.getProducts();
+    
     selectedIds.forEach(id => {
       const product = allProducts.find(p => p.id === id);
       if (product) {
@@ -199,8 +181,9 @@ export const AdminPage: React.FC = () => {
       }
     });
 
-    refreshData();
+    fetchProducts();
     setSelectedIds([]);
+    generateNotifications();
   };
 
   const handleEdit = (product: Product) => {
@@ -374,8 +357,9 @@ export const AdminPage: React.FC = () => {
     } else {
       db.addProduct({ ...finalProduct, sold: 0 });
     }
+    fetchProducts();
     setIsModalOpen(false);
-    refreshData();
+    generateNotifications();
   };
 
   const hasVariants = formData.variants && formData.variants.length > 0;
@@ -419,10 +403,12 @@ export const AdminPage: React.FC = () => {
              <div className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Marketing</div>
              <NavItem id="forms" label="Forms Manager" icon={FormInput} />
              <NavItem id="emails" label="Email Templates" icon={Mail} />
+             <NavItem id="seo" label="SEO & Keywords" icon={Globe} /> {/* NEW: SEO & Keywords Tab */}
           </div>
 
           <div className="space-y-1">
-             <div className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">System</div>
+             <div className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Data</div>
+             <NavItem id="database" label="SQL Database" icon={Database} />
              <NavItem id="settings" label="ตั้งค่าระบบ" icon={Settings} />
           </div>
 
@@ -434,13 +420,15 @@ export const AdminPage: React.FC = () => {
         <header className="bg-white shadow-sm px-4 md:px-8 py-4 flex justify-between items-center sticky top-0 z-30">
           <div>
             <h1 className="text-xl font-bold text-gray-800 capitalize">
-               {activeTab === 'categories' ? 'Menu / Categories' : activeTab === 'pagebuilder' ? 'Page Builder' : activeTab.replace(/([A-Z])/g, ' $1').trim()}
+               {activeTab === 'categories' ? 'Menu / Categories' : activeTab === 'pagebuilder' ? 'Page Builder' : activeTab === 'database' ? 'SQL Manager' : activeTab === 'seo' ? 'SEO & Keywords' : activeTab.replace(/([A-Z])/g, ' $1').trim()}
             </h1>
             <p className="text-xs text-gray-400">
-               {activeTab === 'products' && `มีสินค้าทั้งหมด ${products.length} รายการ`}
+               {activeTab === 'products' && `มีสินค้าทั้งหมด ${totalProductsCount} รายการ`}
                {activeTab === 'categories' && 'Manage Mega Menu & Categories'}
                {activeTab === 'banners' && 'Manage Website Banners'}
                {activeTab === 'pagebuilder' && 'Manage Custom Pages & Content'}
+               {activeTab === 'database' && 'Execute SQL Queries & Manage Data'}
+               {activeTab === 'seo' && 'Generate SEO-friendly Keyword URLs'} {/* NEW: SEO Description */}
                {['templates','layouts','blocks','content','forms','emails'].includes(activeTab) && 'Module Management'}
             </p>
           </div>
@@ -499,6 +487,10 @@ export const AdminPage: React.FC = () => {
         {activeTab === 'banners' && <BannerManager />}
 
         {activeTab === 'pagebuilder' && <PageBuilder />}
+        
+        {activeTab === 'database' && <DatabaseManager />}
+
+        {activeTab === 'seo' && <KeywordUrlGenerator />} {/* NEW: Render KeywordUrlGenerator */}
 
         {['templates', 'layouts', 'blocks', 'content', 'forms', 'emails', 'settings'].includes(activeTab) && (
            <div className="p-12 flex flex-col items-center justify-center h-[60vh] text-center">
@@ -633,7 +625,7 @@ export const AdminPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {currentProducts.map((product) => {
+                  {products.map((product) => {
                     const isSelected = selectedIds.includes(product.id);
                     return (
                       <tr 
@@ -702,7 +694,7 @@ export const AdminPage: React.FC = () => {
 
             {/* Pagination UI */}
             <div className="mt-6 flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
-              <span className="text-xs text-gray-400">แสดง {indexOfFirstItem + 1} ถึง {Math.min(indexOfLastItem, processedProducts.length)} จากทั้งหมด {processedProducts.length} รายการ</span>
+              <span className="text-xs text-gray-400">แสดง {indexOfFirstItem + 1} ถึง {Math.min(indexOfLastItem, totalProductsCount)} จากทั้งหมด {totalProductsCount} รายการ</span>
               <div className="flex gap-2">
                  <button 
                   disabled={productPage === 1}

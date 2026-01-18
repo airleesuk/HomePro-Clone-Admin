@@ -24,6 +24,7 @@ export interface Product {
   rating?: number;
   variants?: ProductVariant[];
   brandId?: number;
+  description?: string; // Added description
 }
 
 export interface Category {
@@ -68,14 +69,43 @@ export interface AdminNotification {
   timestamp: Date;
 }
 
+// New Types for Database Management
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'CUSTOMER' | 'ADMIN';
+  image?: string;
+  createdAt: string;
+}
+
+export interface OrderItem {
+  id: string;
+  productId: number;
+  productName: string;
+  quantity: number;
+  price: number;
+}
+
+export interface Order {
+  id: string;
+  userId: string;
+  userName?: string; // Denormalized for display
+  totalAmount: number;
+  status: 'PENDING' | 'PAID' | 'SHIPPED' | 'COMPLETED' | 'CANCELLED';
+  items: OrderItem[];
+  createdAt: string;
+}
+
 export enum ViewMode {
   CLIENT = 'CLIENT',
   ADMIN = 'ADMIN',
-  PRODUCT_DETAIL = 'PRODUCT_DETAIL'
+  PRODUCT_DETAIL = 'PRODUCT_DETAIL',
+  PAGE_VIEW = 'PAGE_VIEW'
 }
 
 // Page Builder Types
-export type BlockType = 'hero' | 'product-row' | 'text' | 'image' | 'spacer';
+export type BlockType = 'hero' | 'product-row' | 'text' | 'image' | 'spacer' | 'grid';
 
 export interface PageBlock {
   id: string;

@@ -29,6 +29,8 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ product, o
     }
   }, [selectedVariant, product.image]);
 
+  const currentStock = selectedVariant ? selectedVariant.stock : product.stock;
+
   const handleAddToCart = () => {
     alert(`เพิ่ม ${product.name} ${selectedVariant ? `(${selectedVariant.name})` : ''} จำนวน ${quantity} ชิ้น ลงตะกร้าแล้ว`);
   };
@@ -103,9 +105,14 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ product, o
                        <span className="text-lg text-gray-400 line-through font-medium">฿{product.originalPrice.toLocaleString()}</span>
                     )}
                  </div>
-                 <p className="text-blue-600 text-xs font-bold mt-2 flex items-center gap-2">
-                    <Truck size={14}/> ส่งฟรีทั่วไทย เมื่อช้อปครบ 2,000.-
-                 </p>
+                 <div className="flex items-center gap-4 mt-2">
+                    <p className="text-blue-600 text-xs font-bold flex items-center gap-2">
+                        <Truck size={14}/> ส่งฟรีทั่วไทย เมื่อช้อปครบ 2,000.-
+                    </p>
+                    <div className={`px-2 py-0.5 rounded text-[10px] font-bold border ${currentStock < 5 ? 'bg-red-50 text-red-600 border-red-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
+                        {currentStock === 0 ? 'สินค้าหมด' : currentStock < 5 ? `เหลือเพียง ${currentStock} ชิ้น` : 'มีสินค้าพร้อมส่ง'}
+                    </div>
+                 </div>
               </div>
 
               {product.variants && product.variants.length > 0 && (
@@ -132,16 +139,29 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({ product, o
 
               <div className="flex flex-col sm:flex-row gap-4 mt-auto">
                  <div className="flex items-center border-2 border-gray-100 rounded-xl w-fit h-14">
-                    <button onClick={() => setQuantity(Math.max(1, quantity - 1))} className="px-4 h-full hover:bg-gray-50 text-gray-500 rounded-l-xl transition"><Minus size={18}/></button>
+                    <button 
+                        onClick={() => setQuantity(Math.max(1, quantity - 1))} 
+                        disabled={currentStock === 0}
+                        className="px-4 h-full hover:bg-gray-50 text-gray-500 rounded-l-xl transition disabled:opacity-30"
+                    >
+                        <Minus size={18}/>
+                    </button>
                     <input type="number" value={quantity} readOnly className="w-12 text-center font-bold text-lg outline-none" />
-                    <button onClick={() => setQuantity(quantity + 1)} className="px-4 h-full hover:bg-gray-50 text-gray-500 rounded-r-xl transition"><Plus size={18}/></button>
+                    <button 
+                        onClick={() => setQuantity(Math.min(currentStock, quantity + 1))} 
+                        disabled={currentStock === 0 || quantity >= currentStock}
+                        className="px-4 h-full hover:bg-gray-50 text-gray-500 rounded-r-xl transition disabled:opacity-30"
+                    >
+                        <Plus size={18}/>
+                    </button>
                  </div>
                  
                  <button 
                    onClick={handleAddToCart}
-                   className="flex-1 bg-blue-600 text-white h-14 rounded-xl font-black text-lg shadow-xl shadow-blue-200 hover:bg-blue-700 hover:shadow-2xl transition-all active:scale-[0.98] flex items-center justify-center gap-3"
+                   disabled={currentStock === 0}
+                   className={`flex-1 h-14 rounded-xl font-black text-lg shadow-xl shadow-blue-200 transition-all active:scale-[0.98] flex items-center justify-center gap-3 ${currentStock === 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none' : 'bg-blue-600 text-white hover:bg-blue-700 hover:shadow-2xl'}`}
                  >
-                    <ShoppingCart size={22} /> เพิ่มลงตะกร้า
+                    <ShoppingCart size={22} /> {currentStock === 0 ? 'สินค้าหมด' : 'เพิ่มลงตะกร้า'}
                  </button>
               </div>
 
