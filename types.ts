@@ -74,11 +74,9 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  password?: string;
   role: 'CUSTOMER' | 'ADMIN';
   image?: string;
   createdAt: string;
-  dashboardConfig?: any[];
 }
 
 export interface OrderItem {
@@ -107,12 +105,29 @@ export enum ViewMode {
 }
 
 // Page Builder Types
-export type BlockType = 'hero' | 'product-row' | 'text' | 'image' | 'spacer' | 'grid';
+export type BlockType = 'hero' | 'product-row' | 'text' | 'image' | 'spacer' | 'grid' | 'testimonial';
 
 export interface PageBlock {
   id: string;
   type: BlockType;
   data: any; // Flexible data depending on type
+}
+
+export interface SavedBlock {
+  id: string;
+  name: string;
+  category: string;
+  block: PageBlock;
+  createdAt: string;
+}
+
+export interface PageLayout {
+  id: string;
+  name: string;
+  description?: string;
+  blocks: PageBlock[];
+  isDefault?: boolean;
+  thumbnail?: string;
 }
 
 export interface Page {

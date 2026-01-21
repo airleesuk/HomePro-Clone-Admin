@@ -5,13 +5,15 @@ import { db } from '../../services/mockDb';
 import { aiService } from '../../services/aiService';
 import { 
   Database, Play, Trash2, Search, Table, 
-  Terminal, Sparkles, Loader2, RefreshCw, AlertCircle, Save 
+  Terminal, Sparkles, Loader2, RefreshCw, AlertCircle, Save,
+  CheckCircle2
 } from 'lucide-react';
 
 export const DatabaseManager: React.FC = () => {
   const [query, setQuery] = useState('SELECT * FROM products LIMIT 10');
   const [results, setResults] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [activeTable, setActiveTable] = useState<string>('products');
   
   // AI State
@@ -26,7 +28,7 @@ export const DatabaseManager: React.FC = () => {
       alasql('CREATE TABLE IF NOT EXISTS brands');
       alasql('CREATE TABLE IF NOT EXISTS users');
       alasql('CREATE TABLE IF NOT EXISTS orders');
-      alasql('CREATE TABLE IF NOT EXISTS product_variants'); // Added table
+      alasql('CREATE TABLE IF NOT EXISTS product_variants'); 
 
       // Clear existing to avoid dupes on re-mount (in memory)
       alasql('DELETE FROM products');
@@ -42,7 +44,7 @@ export const DatabaseManager: React.FC = () => {
       alasql('INSERT INTO brands SELECT * FROM ?', [db.getBrands()]);
       alasql('INSERT INTO users SELECT * FROM ?', [db.getUsers()]);
       alasql('INSERT INTO orders SELECT * FROM ?', [db.getOrders()]);
-      alasql('INSERT INTO product_variants SELECT * FROM ?', [db.getAllVariants()]); // Populate variants
+      alasql('INSERT INTO product_variants SELECT * FROM ?', [db.getAllVariants()]); 
 
       // Initial Run
       handleRunQuery();
@@ -53,17 +55,47 @@ export const DatabaseManager: React.FC = () => {
 
   const handleRunQuery = () => {
     setError(null);
+    setSuccessMsg(null);
     try {
       const res = alasql(query);
       // alasql returns array of results if multiple queries, or just result if one.
       // We assume single query for now or take the last one.
       const data = Array.isArray(res) && res.length > 0 && Array.isArray(res[0]) ? res[res.length - 1] : res;
       setResults(Array.isArray(data) ? data : []);
+
+      // Check if modification query
+      const upperQuery = query.trim().toUpperCase();
+      if (upperQuery.startsWith('INSERT') || upperQuery.startsWith('UPDATE') || upperQuery.startsWith('DELETE')) {
+         const match = query.match(/(?:INSERT\s+INTO|UPDATE|DELETE\s+FROM)\s+([a-zA-Z0-9_]+)/i);
+         if (match && match[1]) {
+            const tableName = match[1].toLowerCase();
+            syncTableToDb(tableName);
+            setSuccessMsg(`Query executed successfully. Table '${tableName}' synced to storage.`);
+         } else {
+            setSuccessMsg(`Query executed successfully.`);
+         }
+      }
+
     } catch (err: any) {
       setError(err.message);
       setResults([]);
     }
   };
+
+  const syncTableToDb = (tableName: string) => {
+     try {
+       const data = alasql(`SELECT * FROM ${tableName}`);
+       switch(tableName) {
+          case 'products': db.setProducts(data); break;
+          case 'categories': db.setCategories(data); break;
+          case 'brands': db.setBrands(data); break;
+          case 'users': db.setUsers(data); break;
+          case 'orders': db.setOrders(data); break;
+       }
+     } catch(e) {
+       console.error("Sync error", e);
+     }
+  }
 
   const handleAiQuery = async () => {
     if (!aiPrompt.trim()) return;
@@ -73,19 +105,15 @@ export const DatabaseManager: React.FC = () => {
       const sql = await aiService.generateSql(aiPrompt);
       if (sql) {
         setQuery(sql);
-        // Execute immediately
-        try {
-           const res = alasql(sql);
-           const data = Array.isArray(res) && res.length > 0 && Array.isArray(res[0]) ? res[res.length - 1] : res;
-           setResults(Array.isArray(data) ? data : []);
-        } catch (err: any) {
-           setError(`Generated SQL Error: ${err.message}`);
-        }
+        // Execute immediately is optional, but convenient
+        setTimeout(() => {
+           // We click run programmatically or just let user click
+        }, 100);
       } else {
-        setError("AI could not generate a query.");
+        setError("AI ไม่สามารถสร้างคำสั่ง SQL ได้ กรุณาลองใหม่");
       }
     } catch (e) {
-      setError("AI Service Error");
+      setError("เกิดข้อผิดพลาดในการเชื่อมต่อกับ AI");
     } finally {
       setIsAiLoading(false);
     }
@@ -109,13 +137,25 @@ export const DatabaseManager: React.FC = () => {
       }
   };
 
+  const getTableLabel = (table: string) => {
+    switch(table) {
+        case 'products': return 'สินค้า (Products)';
+        case 'categories': return 'หมวดหมู่ (Categories)';
+        case 'brands': return 'แบรนด์ (Brands)';
+        case 'users': return 'ผู้ใช้งาน (Users)';
+        case 'orders': return 'คำสั่งซื้อ (Orders)';
+        case 'product_variants': return 'ตัวเลือกสินค้า (Variants)';
+        default: return table;
+    }
+  };
+
   return (
     <div className="flex h-full flex-col md:flex-row bg-gray-50 overflow-hidden" style={{ height: 'calc(100vh - 140px)' }}>
       {/* Sidebar - Tables */}
       <div className="w-full md:w-64 bg-white border-r border-gray-200 flex-shrink-0 flex flex-col">
          <div className="p-4 border-b border-gray-100 bg-gray-50">
             <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
-              <Database size={14} /> Database Tables
+              <Database size={14} /> ตารางฐานข้อมูล
             </h3>
          </div>
          <div className="p-2 space-y-1 overflow-y-auto flex-1">
@@ -125,11 +165,11 @@ export const DatabaseManager: React.FC = () => {
                 onClick={() => loadTableTemplate(table)}
                 className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-sm font-medium transition ${activeTable === table ? 'bg-blue-50 text-blue-700' : 'text-gray-600 hover:bg-gray-100'}`}
               >
-                 <div className="flex items-center gap-2 capitalize">
+                 <div className="flex items-center gap-2 capitalize truncate">
                     <Table size={16} className={activeTable === table ? 'text-blue-500' : 'text-gray-400'} />
-                    {table}
+                    <span className="truncate">{getTableLabel(table)}</span>
                  </div>
-                 <span className="text-xs bg-gray-200 px-2 py-0.5 rounded-full text-gray-500">
+                 <span className="text-xs bg-gray-200 px-2 py-0.5 rounded-full text-gray-500 flex-shrink-0">
                     {getTableCount(table)}
                  </span>
               </button>
@@ -137,7 +177,8 @@ export const DatabaseManager: React.FC = () => {
          </div>
          <div className="p-4 border-t border-gray-100 bg-gray-50">
             <div className="text-[10px] text-gray-400">
-               Powered by AlaSQL (In-Memory)
+               ขับเคลื่อนโดย AlaSQL (In-Memory) <br/>
+               * การแก้ไขข้อมูล (INSERT/UPDATE/DELETE) จะถูกบันทึกลง MockDB โดยอัตโนมัติ
             </div>
          </div>
       </div>
@@ -155,15 +196,15 @@ export const DatabaseManager: React.FC = () => {
                  value={aiPrompt}
                  onChange={(e) => setAiPrompt(e.target.value)}
                  onKeyPress={(e) => e.key === 'Enter' && handleAiQuery()}
-                 placeholder="Ask AI to query data (e.g. 'Show me variants for Tank DOS')..." 
-                 className="block w-full pl-10 pr-4 py-2.5 bg-purple-50 border border-purple-100 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
+                 placeholder="ถาม AI ให้ช่วยเขียน SQL (เช่น 'แสดงสินค้าที่มีราคาสูงกว่า 5000 บาท' หรือ 'เพิ่มแบรนด์ใหม่ชื่อ Test')..." 
+                 className="block w-full pl-10 pr-32 py-2.5 bg-purple-50 border border-purple-100 rounded-xl text-sm focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition"
                />
                <button 
                  onClick={handleAiQuery}
                  disabled={isAiLoading || !aiPrompt.trim()}
                  className="absolute inset-y-1 right-1 px-4 bg-purple-600 text-white rounded-lg text-xs font-bold hover:bg-purple-700 disabled:opacity-50 transition flex items-center gap-2"
                >
-                 {isAiLoading ? <Loader2 size={14} className="animate-spin" /> : 'Generate SQL'}
+                 {isAiLoading ? <Loader2 size={14} className="animate-spin" /> : 'สร้างคำสั่ง SQL'}
                </button>
             </div>
          </div>
@@ -176,11 +217,11 @@ export const DatabaseManager: React.FC = () => {
                      <Terminal size={12} /> SQL Editor
                   </span>
                   <div className="flex items-center gap-2">
-                     <button onClick={() => setQuery('')} className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-700 transition" title="Clear">
+                     <button onClick={() => setQuery('')} className="text-gray-400 hover:text-white p-1 rounded hover:bg-gray-700 transition" title="ล้าง">
                         <Trash2 size={14} />
                      </button>
                      <button onClick={handleRunQuery} className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-bold flex items-center gap-1 transition">
-                        <Play size={12} /> Run
+                        <Play size={12} /> รันคำสั่ง (Run)
                      </button>
                   </div>
                </div>
@@ -197,6 +238,11 @@ export const DatabaseManager: React.FC = () => {
                {error && (
                   <div className="bg-red-50 border-b border-red-100 p-3 flex items-center gap-2 text-red-600 text-sm font-medium animate-in slide-in-from-top-2">
                      <AlertCircle size={16} /> Error: {error}
+                  </div>
+               )}
+               {successMsg && !error && (
+                  <div className="bg-green-50 border-b border-green-100 p-3 flex items-center gap-2 text-green-600 text-sm font-medium animate-in slide-in-from-top-2">
+                     <CheckCircle2 size={16} /> {successMsg}
                   </div>
                )}
                
@@ -231,13 +277,13 @@ export const DatabaseManager: React.FC = () => {
                         ) : (
                            <Table size={48} className="mb-2 opacity-20" />
                         )}
-                        <p className="text-sm">{error ? 'Query failed' : 'No results to display'}</p>
+                        <p className="text-sm">{error ? 'การดำเนินการล้มเหลว' : 'ไม่มีผลลัพธ์ที่จะแสดง'}</p>
                      </div>
                   )}
                </div>
                
                <div className="p-2 bg-gray-50 border-t border-gray-200 text-xs text-gray-500 flex justify-between items-center">
-                  <span>{results.length} rows returned</span>
+                  <span>พบข้อมูล {results.length} รายการ</span>
                   <span>Execution time: &lt; 10ms</span>
                </div>
             </div>

@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 export const Hero: React.FC = () => {
@@ -9,9 +10,9 @@ export const Hero: React.FC = () => {
           {/* Main Banner Slider */}
           <div className="col-span-12 lg:col-span-8 relative rounded-lg overflow-hidden shadow-md group h-48 md:h-80 lg:h-96">
             <img 
-              src="https://images.unsplash.com/photo-1600585154340-be6161a56a0c?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" 
+              src="https://images.unsplash.com/photo-1584622781564-1d9876a13d00?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" 
               alt="Main Promo" 
-              className="w-full h-full object-cover"
+              className="w-full h-full object-cover transition-transform duration-500 ease-in-out group-hover:scale-105"
             />
             <div className="absolute inset-0 bg-gradient-to-r from-black/50 to-transparent flex items-center p-8 md:p-12">
                <div className="text-white">

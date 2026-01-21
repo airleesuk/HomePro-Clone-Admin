@@ -9,6 +9,10 @@ import { BannerManager } from '../components/admin/BannerManager';
 import { PageBuilder } from '../components/admin/PageBuilder';
 import { DatabaseManager } from '../components/admin/DatabaseManager';
 import { KeywordUrlGenerator } from '../components/admin/KeywordUrlGenerator';
+import { TemplateGenerator } from '../components/admin/TemplateGenerator';
+import { BlockGenerator } from '../components/admin/BlockGenerator';
+import { LayoutManager } from '../components/admin/LayoutManager'; // Import LayoutManager
+import { ProductQuickViewModal } from '../components/ProductQuickViewModal';
 import { 
   Package, Settings, Plus, Trash2, Edit, Save, X, Search, 
   ChevronLeft, ChevronRight, ArrowUpDown, ArrowUp, ArrowDown, 
@@ -16,7 +20,7 @@ import {
   AlertCircle, XCircle, Bell, Grid as GridIcon, Tag,
   ZapOff, StarOff, Layout, FileText, Image as ImageIcon,
   PenTool, Mail, FormInput, FileBox, AlignLeft, Menu, Briefcase,
-  Database, Globe
+  Database, Globe, RotateCcw
 } from 'lucide-react';
 
 export const AdminPage: React.FC = () => {
@@ -31,6 +35,8 @@ export const AdminPage: React.FC = () => {
   // UI State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
 
   // Filter & Search State
   const [productSearchQuery, setProductSearchQuery] = useState('');
@@ -66,11 +72,25 @@ export const AdminPage: React.FC = () => {
   });
 
   const [variantErrors, setVariantErrors] = useState<Record<string, string>>({});
+  const [selectedVariantForEditing, setSelectedVariantForEditing] = useState<string | null>(null);
 
   useEffect(() => {
     fetchProducts();
   }, [productSearchQuery, selectedCategory, stockFilter, typeFilter, brandFilter, sortConfig, productPage]);
 
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setPreviewImage(null);
+      }
+    };
+    if (previewImage) {
+      window.addEventListener('keydown', handleKeyDown);
+    }
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [previewImage]);
 
   useEffect(() => {
     generateNotifications();
@@ -219,6 +239,11 @@ export const AdminPage: React.FC = () => {
     });
     setVariantErrors({});
     setIsModalOpen(true);
+    if (product.variants && product.variants.length > 0) {
+        setSelectedVariantForEditing(product.variants[0].id);
+    } else {
+        setSelectedVariantForEditing(null);
+    }
   };
 
   const handleAddNew = () => {
@@ -240,6 +265,7 @@ export const AdminPage: React.FC = () => {
     });
     setVariantErrors({});
     setIsModalOpen(true);
+    setSelectedVariantForEditing(null);
   };
 
   const validateUniqueNames = (variants: ProductVariant[]) => {
@@ -292,6 +318,7 @@ export const AdminPage: React.FC = () => {
       stock: totalStock,
       price: minVariantPrice
     });
+    setSelectedVariantForEditing(newVariant.id);
   };
 
   const handleUpdateVariant = (id: string, field: keyof ProductVariant, value: string | number | string[]) => {
@@ -336,6 +363,13 @@ export const AdminPage: React.FC = () => {
       stock: totalStock,
       price: minVariantPrice
     });
+    if (selectedVariantForEditing === id) {
+        if (updatedVariants.length > 0) {
+            setSelectedVariantForEditing(updatedVariants[0].id);
+        } else {
+            setSelectedVariantForEditing(null);
+        }
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -363,6 +397,75 @@ export const AdminPage: React.FC = () => {
   };
 
   const hasVariants = formData.variants && formData.variants.length > 0;
+  const hasManyVariants = hasVariants && formData.variants.length > 5;
+
+  const VariantEditor: React.FC<{ variant: ProductVariant }> = ({ variant }) => {
+    return (
+        <div className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm relative group hover:border-purple-300 transition-all duration-300">
+            <button 
+                type="button" 
+                onClick={() => handleRemoveVariant(variant.id)} 
+                className="absolute -top-3 -right-3 bg-red-100 text-red-600 hover:bg-red-600 hover:text-white p-1.5 rounded-full shadow-lg transition-all duration-300 z-10 opacity-0 group-hover:opacity-100"
+                title="ลบตัวเลือกนี้"
+            >
+                <X size={14} />
+            </button>
+            
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+                <div className="md:col-span-6">
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-tighter">ชื่อตัวเลือก (เช่น สีแดง, XL)</label>
+                    <div className="relative w-full">
+                        <input 
+                            type="text" 
+                            value={variant.name} 
+                            onChange={(e) => handleUpdateVariant(variant.id, 'name', e.target.value)} 
+                            className={`w-full text-sm border rounded-lg px-3 py-2 outline-none transition shadow-sm ${variantErrors[variant.id] ? 'border-red-500 ring-2 ring-red-50 bg-red-50' : 'border-gray-200 focus:ring-2 focus:ring-purple-500'}`} 
+                            placeholder="ใส่ชื่อตัวเลือก..."
+                            required
+                        />
+                        {variantErrors[variant.id] && (
+                            <p className="text-[9px] text-red-600 mt-1.5 flex items-center gap-1 font-bold italic animate-pulse">
+                                <AlertCircle size={10} /> {variantErrors[variant.id]}
+                            </p>
+                        )}
+                    </div>
+                </div>
+
+                <div className="md:col-span-3">
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-tighter">ราคา (บาท)</label>
+                    <input 
+                        type="number" 
+                        value={variant.price} 
+                        onChange={(e) => handleUpdateVariant(variant.id, 'price', Number(e.target.value))} 
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none transition shadow-sm" 
+                        placeholder="0"
+                        required
+                    />
+                </div>
+
+                <div className="md:col-span-3">
+                    <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-tighter">สต็อก</label>
+                    <input 
+                        type="number" 
+                        value={variant.stock} 
+                        onChange={(e) => handleUpdateVariant(variant.id, 'stock', Number(e.target.value))} 
+                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none transition shadow-sm" 
+                        placeholder="0"
+                        required
+                    />
+                </div>
+
+                <div className="md:col-span-12 pt-2 border-t border-gray-50 mt-1">
+                    <ImageManager 
+                        images={variant.images || []}
+                        onChange={(newImages) => handleUpdateVariant(variant.id, 'images', newImages)}
+                        label="รูปภาพสำหรับตัวเลือกนี้"
+                    />
+                </div>
+            </div>
+        </div>
+    );
+  };
 
   const NavItem = ({ id, label, icon: Icon }: any) => (
     <button 
@@ -390,8 +493,8 @@ export const AdminPage: React.FC = () => {
 
           <div className="space-y-1">
              <div className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Design & CMS</div>
-             <NavItem id="templates" label="Templates" icon={Layout} />
-             <NavItem id="layouts" label="Layouts" icon={Layers} />
+             <NavItem id="templates" label="Templates (AI)" icon={Layout} />
+             <NavItem id="layouts" label="Layouts Manager" icon={Layers} />
              <NavItem id="pagebuilder" label="Page Builder" icon={PenTool} />
              <NavItem id="blocks" label="Blocks" icon={FileBox} />
              <NavItem id="categories" label="Menu" icon={Menu} />
@@ -403,12 +506,12 @@ export const AdminPage: React.FC = () => {
              <div className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Marketing</div>
              <NavItem id="forms" label="Forms Manager" icon={FormInput} />
              <NavItem id="emails" label="Email Templates" icon={Mail} />
-             <NavItem id="seo" label="SEO & Keywords" icon={Globe} /> {/* NEW: SEO & Keywords Tab */}
+             <NavItem id="seo" label="SEO & Keywords" icon={Globe} />
           </div>
 
           <div className="space-y-1">
              <div className="px-4 text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Data</div>
-             <NavItem id="database" label="SQL Database" icon={Database} />
+             <NavItem id="database" label="ฐานข้อมูล (SQL)" icon={Database} />
              <NavItem id="settings" label="ตั้งค่าระบบ" icon={Settings} />
           </div>
 
@@ -420,7 +523,7 @@ export const AdminPage: React.FC = () => {
         <header className="bg-white shadow-sm px-4 md:px-8 py-4 flex justify-between items-center sticky top-0 z-30">
           <div>
             <h1 className="text-xl font-bold text-gray-800 capitalize">
-               {activeTab === 'categories' ? 'Menu / Categories' : activeTab === 'pagebuilder' ? 'Page Builder' : activeTab === 'database' ? 'SQL Manager' : activeTab === 'seo' ? 'SEO & Keywords' : activeTab.replace(/([A-Z])/g, ' $1').trim()}
+               {activeTab === 'categories' ? 'Menu / Categories' : activeTab === 'pagebuilder' ? 'Page Builder' : activeTab === 'database' ? 'SQL Manager' : activeTab === 'seo' ? 'SEO & Keywords' : activeTab === 'templates' ? 'Template Generator' : activeTab === 'layouts' ? 'Layouts Manager' : activeTab === 'blocks' ? 'Block Generator' : activeTab.replace(/([A-Z])/g, ' $1').trim()}
             </h1>
             <p className="text-xs text-gray-400">
                {activeTab === 'products' && `มีสินค้าทั้งหมด ${totalProductsCount} รายการ`}
@@ -428,8 +531,11 @@ export const AdminPage: React.FC = () => {
                {activeTab === 'banners' && 'Manage Website Banners'}
                {activeTab === 'pagebuilder' && 'Manage Custom Pages & Content'}
                {activeTab === 'database' && 'Execute SQL Queries & Manage Data'}
-               {activeTab === 'seo' && 'Generate SEO-friendly Keyword URLs'} {/* NEW: SEO Description */}
-               {['templates','layouts','blocks','content','forms','emails'].includes(activeTab) && 'Module Management'}
+               {activeTab === 'seo' && 'Generate SEO-friendly Keyword URLs'}
+               {activeTab === 'templates' && 'AI-Powered Page Layout Generator'}
+               {activeTab === 'layouts' && 'Manage Page Layouts & Defaults'}
+               {activeTab === 'blocks' && 'Generate & Manage Reusable UI Blocks'}
+               {['content','forms','emails'].includes(activeTab) && 'Module Management'}
             </p>
           </div>
           
@@ -490,9 +596,15 @@ export const AdminPage: React.FC = () => {
         
         {activeTab === 'database' && <DatabaseManager />}
 
-        {activeTab === 'seo' && <KeywordUrlGenerator />} {/* NEW: Render KeywordUrlGenerator */}
+        {activeTab === 'seo' && <KeywordUrlGenerator />}
+        
+        {activeTab === 'templates' && <TemplateGenerator />}
 
-        {['templates', 'layouts', 'blocks', 'content', 'forms', 'emails', 'settings'].includes(activeTab) && (
+        {activeTab === 'layouts' && <LayoutManager />}
+
+        {activeTab === 'blocks' && <BlockGenerator />}
+
+        {['content', 'forms', 'emails', 'settings'].includes(activeTab) && (
            <div className="p-12 flex flex-col items-center justify-center h-[60vh] text-center">
               <div className="bg-gray-100 p-6 rounded-full mb-6">
                  <Settings size={48} className="text-gray-400 animate-spin-slow" />
@@ -531,7 +643,7 @@ export const AdminPage: React.FC = () => {
                </div>
 
                {/* Advanced Filters */}
-               <div className="flex flex-wrap gap-4">
+               <div className="flex flex-wrap gap-4 items-end">
                    {/* Category Filter */}
                    <div className="flex-1 min-w-[200px] relative">
                      <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
@@ -595,6 +707,23 @@ export const AdminPage: React.FC = () => {
                       </select>
                       <ChevronRight className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 rotate-90" size={14} />
                    </div>
+
+                   {/* Reset Filters */}
+                   {(selectedCategory !== 'All' || stockFilter !== 'all' || typeFilter !== 'all' || brandFilter !== 'all' || productSearchQuery !== '') && (
+                      <button 
+                        onClick={() => {
+                          setSelectedCategory('All');
+                          setStockFilter('all');
+                          setTypeFilter('all');
+                          setBrandFilter('all');
+                          setProductSearchQuery('');
+                        }}
+                        className="h-[46px] px-4 rounded-xl bg-red-50 text-red-600 font-bold text-xs hover:bg-red-100 transition flex items-center gap-2"
+                        title="ล้างตัวกรองทั้งหมด"
+                      >
+                        <RotateCcw size={16} /> ล้าง
+                      </button>
+                   )}
                </div>
             </div>
 
@@ -650,8 +779,14 @@ export const AdminPage: React.FC = () => {
                         </td>
                         <td className="p-4 text-gray-400 text-xs font-mono">#{product.id}</td>
                         <td className="p-4 font-medium text-gray-800 flex items-center gap-4">
-                           <div className="relative w-12 h-12 flex-shrink-0 bg-white rounded-lg border border-gray-100 p-1 group-hover:border-blue-300 transition-colors shadow-sm">
-                             <img src={product.image} className="w-full h-full object-contain rounded-md" alt="" />
+                           <div 
+                              className="relative w-12 h-12 flex-shrink-0 bg-white rounded-lg border border-gray-100 p-1 group-hover:border-blue-300 transition-colors shadow-sm cursor-pointer"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setPreviewImage({ url: product.image, name: product.name });
+                              }}
+                           >
+                             <img src={product.image} className="w-full h-full object-contain rounded-md" alt={product.name} />
                              {product.isFeatured && (
                                <div className="absolute -top-1.5 -right-1.5 bg-yellow-400 p-0.5 rounded-full shadow-sm ring-2 ring-white">
                                  <Star size={8} className="text-white fill-white" />
@@ -884,80 +1019,37 @@ export const AdminPage: React.FC = () => {
                   </div>
                   
                   <div className="space-y-4">
-                    {(formData.variants || []).length === 0 ? (
-                      <div className="text-center py-10 text-gray-400 text-xs italic bg-white border border-dashed rounded-2xl flex flex-col items-center gap-2">
-                        <Layers size={32} className="text-gray-200" />
-                        สินค้าชิ้นนี้ยังไม่มีตัวเลือกย่อย (เช่น สี หรือ ขนาด)
-                      </div>
-                    ) : (
-                      <div className="grid grid-cols-1 gap-4">
-                        {(formData.variants || []).map((variant) => (
-                          <div key={variant.id} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm relative group hover:border-purple-300 transition-all duration-300">
-                            <button 
-                              type="button" 
-                              onClick={() => handleRemoveVariant(variant.id)} 
-                              className="absolute -top-3 -right-3 bg-red-100 text-red-600 hover:bg-red-600 hover:text-white p-1.5 rounded-full shadow-lg transition-all duration-300 z-10 opacity-0 group-hover:opacity-100"
-                              title="ลบตัวเลือกนี้"
-                            >
-                              <X size={14} />
-                            </button>
-                            
-                            <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
-                              <div className="md:col-span-6">
-                                <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-tighter">ชื่อตัวเลือก (เช่น สีแดง, XL)</label>
-                                <div className="relative w-full">
-                                  <input 
-                                    type="text" 
-                                    value={variant.name} 
-                                    onChange={(e) => handleUpdateVariant(variant.id, 'name', e.target.value)} 
-                                    className={`w-full text-sm border rounded-lg px-3 py-2 outline-none transition shadow-sm ${variantErrors[variant.id] ? 'border-red-500 ring-2 ring-red-50 bg-red-50' : 'border-gray-200 focus:ring-2 focus:ring-purple-500'}`} 
-                                    placeholder="ใส่ชื่อตัวเลือก..."
-                                    required
-                                  />
-                                  {variantErrors[variant.id] && (
-                                    <p className="text-[9px] text-red-600 mt-1.5 flex items-center gap-1 font-bold italic animate-pulse">
-                                      <AlertCircle size={10} /> {variantErrors[variant.id]}
-                                    </p>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="md:col-span-3">
-                                <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-tighter">ราคา (บาท)</label>
-                                <input 
-                                  type="number" 
-                                  value={variant.price} 
-                                  onChange={(e) => handleUpdateVariant(variant.id, 'price', Number(e.target.value))} 
-                                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none transition shadow-sm" 
-                                  placeholder="0"
-                                  required
-                                />
-                              </div>
-
-                              <div className="md:col-span-3">
-                                <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5 tracking-tighter">สต็อก</label>
-                                <input 
-                                  type="number" 
-                                  value={variant.stock} 
-                                  onChange={(e) => handleUpdateVariant(variant.id, 'stock', Number(e.target.value))} 
-                                  className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-purple-500 outline-none transition shadow-sm" 
-                                  placeholder="0"
-                                  required
-                                />
-                              </div>
-
-                              <div className="md:col-span-12 pt-2 border-t border-gray-50 mt-1">
-                                 <ImageManager 
-                                    images={variant.images || []}
-                                    onChange={(newImages) => handleUpdateVariant(variant.id, 'images', newImages)}
-                                    label="รูปภาพสำหรับตัวเลือกนี้"
-                                 />
-                              </div>
-                            </div>
+                      {(!formData.variants || formData.variants.length === 0) ? (
+                          <div className="text-center py-10 text-gray-400 text-xs italic bg-white border border-dashed rounded-2xl flex flex-col items-center gap-2">
+                              <Layers size={32} className="text-gray-200" />
+                              สินค้าชิ้นนี้ยังไม่มีตัวเลือกย่อย (เช่น สี หรือ ขนาด)
                           </div>
-                        ))}
-                      </div>
-                    )}
+                      ) : hasManyVariants ? (
+                          <div className="space-y-4">
+                              <div className="flex items-center gap-4 bg-white p-3 rounded-xl border">
+                                  <label className="text-sm font-bold text-gray-600 shrink-0">เลือกตัวเลือกเพื่อแก้ไข:</label>
+                                  <select
+                                      value={selectedVariantForEditing || ''}
+                                      onChange={(e) => setSelectedVariantForEditing(e.target.value || null)}
+                                      className="flex-1 border-gray-200 border rounded-lg p-2 text-sm bg-gray-50 focus:ring-2 focus:ring-purple-500 outline-none cursor-pointer"
+                                  >
+                                      {formData.variants.map(v => (
+                                          <option key={v.id} value={v.id}>{v.name || 'Untitled Variant'}</option>
+                                      ))}
+                                  </select>
+                              </div>
+                              {/* Render editor for the selected variant */}
+                              {formData.variants.find(v => v.id === selectedVariantForEditing) && (
+                                  <VariantEditor variant={formData.variants.find(v => v.id === selectedVariantForEditing)!} />
+                              )}
+                          </div>
+                      ) : (
+                          <div className="grid grid-cols-1 gap-4">
+                              {(formData.variants || []).map((variant) => (
+                                  <VariantEditor key={variant.id} variant={variant} />
+                              ))}
+                          </div>
+                      )}
                   </div>
                 </div>
 
@@ -1008,6 +1100,30 @@ export const AdminPage: React.FC = () => {
                    </button>
                 </div>
              </form>
+          </div>
+        </div>
+      )}
+
+      {/* Quick View Modal */}
+      {quickViewProduct && (
+        <ProductQuickViewModal 
+          product={quickViewProduct} 
+          onClose={() => setQuickViewProduct(null)} 
+        />
+      )}
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setPreviewImage(null)}>
+          <div className="relative max-w-4xl max-h-[90vh] w-auto h-auto animate-in zoom-in-95 duration-200">
+             <img src={previewImage.url} alt={previewImage.name} className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" />
+             <button 
+               onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }}
+               aria-label="Close image preview"
+               className="absolute -top-4 -right-4 bg-white text-gray-800 p-2 rounded-full shadow-lg hover:bg-gray-100 transition"
+             >
+               <X size={20} />
+             </button>
           </div>
         </div>
       )}

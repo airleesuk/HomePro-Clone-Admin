@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { db } from '../../services/mockDb';
+import { aiService } from '../../services/aiService';
 import { Banner } from '../../types';
-import { Plus, Edit, Trash2, Search, X, Image as ImageIcon } from 'lucide-react';
+import { Plus, Edit, Trash2, Search, X, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react';
 import { ImageManager } from './ImageManager';
 
 export const BannerManager: React.FC = () => {
@@ -13,6 +14,10 @@ export const BannerManager: React.FC = () => {
     image: '',
     alt: ''
   });
+
+  // AI State
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     refreshData();
@@ -32,12 +37,14 @@ export const BannerManager: React.FC = () => {
   const handleEdit = (banner: Banner) => {
     setEditingBanner(banner);
     setFormData(banner);
+    setAiPrompt('');
     setIsModalOpen(true);
   };
 
   const handleAddNew = () => {
     setEditingBanner(null);
     setFormData({ image: '', alt: '' });
+    setAiPrompt('');
     setIsModalOpen(true);
   };
 
@@ -50,6 +57,24 @@ export const BannerManager: React.FC = () => {
     }
     setIsModalOpen(false);
     refreshData();
+  };
+
+  const handleGenerateAiImage = async () => {
+    if (!aiPrompt.trim()) return;
+    setIsGenerating(true);
+    try {
+        const imageUrl = await aiService.generateImage(aiPrompt);
+        if (imageUrl) {
+            setFormData({ ...formData, image: imageUrl });
+        } else {
+            alert('AI could not generate the image. Please try again.');
+        }
+    } catch (e) {
+        console.error(e);
+        alert('Error generating image');
+    } finally {
+        setIsGenerating(false);
+    }
   };
 
   return (
@@ -100,6 +125,32 @@ export const BannerManager: React.FC = () => {
               <button onClick={() => setIsModalOpen(false)}><X size={20}/></button>
             </div>
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              
+              {/* AI Generator Section */}
+              <div className="bg-purple-50 p-4 rounded-xl border border-purple-100">
+                  <h4 className="text-sm font-bold text-purple-800 mb-2 flex items-center gap-2">
+                      <Sparkles size={16} /> AI Banner Designer
+                  </h4>
+                  <div className="flex gap-2">
+                      <input 
+                          type="text" 
+                          value={aiPrompt}
+                          onChange={(e) => setAiPrompt(e.target.value)}
+                          placeholder="Describe your banner (e.g. Summer Sale, Beach background, 50% Off text)..."
+                          className="flex-1 text-xs border border-purple-200 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
+                          disabled={isGenerating}
+                      />
+                      <button 
+                          type="button"
+                          onClick={handleGenerateAiImage}
+                          disabled={isGenerating || !aiPrompt.trim()}
+                          className="bg-purple-600 text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-purple-700 disabled:opacity-50 flex items-center gap-2 transition-all shadow-sm"
+                      >
+                          {isGenerating ? <Loader2 size={14} className="animate-spin" /> : 'Generate'}
+                      </button>
+                  </div>
+              </div>
+
               <div>
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">คำอธิบายภาพ (Alt Text)</label>
                 <input 

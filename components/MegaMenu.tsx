@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChevronRight, Zap, Droplets, Wrench, Grid, HardHat, Lightbulb, FlaskConical, Database, Utensils, Snowflake, Gauge, Bath, Truck, Recycle, Waves, GlassWater, ArrowDownToLine, Filter, Box, ArrowLeft, Home, Phone, FileText, Edit2 } from 'lucide-react';
+import { X, ChevronRight, Zap, Droplets, Wrench, Grid, HardHat, Lightbulb, FlaskConical, Database, Utensils, Snowflake, Gauge, Bath, Truck, Recycle, Waves, GlassWater, ArrowDownToLine, Filter, Box, ArrowLeft, Home, Phone, FileText, Edit2, Settings } from 'lucide-react';
 import { db } from '../services/mockDb';
 import { Category } from '../types';
 import { MegaMenuEditModal } from './admin/MegaMenuEditModal';
@@ -31,6 +31,7 @@ const IconMap: Record<string, React.ReactNode> = {
   'arrow-down-to-line': <ArrowDownToLine size={18} />,
   'filter': <Filter size={18} />,
   'box': <Box size={18} />,
+  'filter-cog': <Settings size={18} />,
 };
 
 // Standard links for mobile view

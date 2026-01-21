@@ -1,6 +1,6 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { Product, PageBlock } from "../types";
+import { Product, PageBlock, BlockType } from "../types";
 
 export class AiService {
   private ai: GoogleGenAI;
@@ -54,6 +54,7 @@ export class AiService {
       4. image: { url: string (use a realistic unsplash source url), alt: string, caption: string }
       5. spacer: { height: number (usually 30-50) }
       6. grid: { columns: number (2, 3, or 4), items: Array<{ title: string, description: string, image: string }> }
+      7. testimonial: { title: string, items: Array<{ name: string, role: string, quote: string, avatar: string (optional unsplash url or empty) }> }
 
       Rules:
       - The output must be a valid JSON array of objects.
@@ -90,15 +91,64 @@ export class AiService {
     }
   }
 
+  async generateBlock(type: BlockType, prompt: string): Promise<PageBlock | null> {
+    const systemInstruction = `
+      You are an expert UI/UX designer. Generate a single JSON object for a web component (Block) of type '${type}'.
+      Context: ${prompt}
+      
+      Schemas:
+      - hero: { title, subtitle, image (realistic unsplash url), buttonText }
+      - text: { content (Write rich Thai HTML marketing copy using h2, h3, p, ul, strong. No markdown.) }
+      - product-row: { title, category (choose from: 'แทงค์น้ำ PE', 'เครื่องใช้ไฟฟ้า', 'ปั๊มน้ำ', 'All'), count }
+      - image: { url (realistic unsplash url), alt, caption }
+      - grid: { columns (2-4), items: [{title, description, image (realistic unsplash url)}] }
+      - spacer: { height }
+      - testimonial: { title, items: [{name, role, quote, avatar (unsplash url)}] }
+
+      Return ONLY the JSON object representing the Block Data. Do not wrap in array. Do not wrap in markdown.
+    `;
+
+    try {
+      const response: GenerateContentResponse = await this.ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: `Generate a '${type}' block. Details: ${prompt}`,
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+        },
+      });
+
+      const text = response.text;
+      if (!text) return null;
+      
+      const blockData = JSON.parse(text);
+      
+      return {
+        id: `ai-single-block-${Date.now()}`,
+        type,
+        data: blockData
+      };
+
+    } catch (error) {
+      console.error("AI Single Block Gen Error:", error);
+      return null;
+    }
+  }
+
   async generateSql(prompt: string): Promise<string> {
     const systemInstruction = `
       You are a SQL expert for a local AlaSQL (SQLite-compatible) database.
       Your task is to convert natural language queries into valid, executable SQL queries.
+      
+      IMPORTANT: The user may ask questions in THAI. You must interpret the Thai intent and generate the corresponding SQL.
 
       Database Schema:
       1. products (id, name, price, originalPrice, category, stock, sold, discount, isFlashSale, isFeatured, brandId)
       2. categories (id, name, icon, iconKey)
       3. brands (id, name, logo)
+      4. users (id, name, email, role, createdAt)
+      5. orders (id, userId, userName, totalAmount, status, createdAt)
+      6. product_variants (id, productId, productName, name, price, stock)
 
       Rules:
       - Return ONLY the raw SQL string. Do not include markdown formatting (like \`\`\`sql) or explanations.
@@ -107,6 +157,7 @@ export class AiService {
       - For "low stock", assume stock < 5.
       - For "best selling", order by sold DESC.
       - Always use single quotes for strings.
+      - Example Thai: "หาสินค้าที่ราคามากกว่า 5000" -> SELECT * FROM products WHERE price > 5000
     `;
 
     try {
@@ -177,6 +228,33 @@ export class AiService {
     } catch (error) {
       console.error("AI SEO Keywords Gen Error:", error);
       return "";
+    }
+  }
+
+  async generateImage(prompt: string): Promise<string | null> {
+    try {
+      const response: GenerateContentResponse = await this.ai.models.generateContent({
+        model: 'gemini-2.5-flash-image',
+        contents: {
+          parts: [{ text: prompt }],
+        },
+      });
+
+      const candidates = response.candidates;
+      if (candidates && candidates.length > 0) {
+         const parts = candidates[0].content?.parts;
+         if (parts) {
+            for (const part of parts) {
+                if (part.inlineData && part.inlineData.data) {
+                    return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+                }
+            }
+         }
+      }
+      return null;
+    } catch (error) {
+      console.error("AI Image Gen Error:", error);
+      return null;
     }
   }
 }

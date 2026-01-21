@@ -9,6 +9,7 @@ import { AiAssistant } from '../components/AiAssistant';
 import { db } from '../services/mockDb';
 import { Product, ProductVariant } from '../types';
 import { Star, ShoppingCart, Check, ChevronRight, ArrowLeft, Filter, Grid, Eye, X, Plus, Minus, ShieldCheck, Truck, Layers, ChevronDown, Circle, AlertCircle } from 'lucide-react';
+import { ProductQuickViewModal } from '../components/ProductQuickViewModal';
 
 interface HomePageProps {
   onProductClick?: (product: Product) => void;
@@ -44,10 +45,20 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
 
   const stockInfo = getStockStatus(currentStock);
 
+  const handleVariantClick = (e: React.MouseEvent, variant: ProductVariant) => {
+    e.stopPropagation();
+    // Toggle selection: if already selected, deselect it
+    if (selectedVariant?.id === variant.id) {
+        setSelectedVariant(null);
+    } else {
+        setSelectedVariant(variant);
+    }
+  };
+
   return (
     <div 
       onClick={() => onClick && onClick(product)}
-      className={`bg-white rounded-2xl border hover:shadow-2xl transition-all duration-300 p-4 group cursor-pointer flex flex-col h-full relative ${product.isFeatured ? 'border-yellow-200 ring-1 ring-yellow-100' : 'border-gray-100'}`}
+      className={`bg-white rounded-2xl border hover:shadow-xl hover:border-blue-300 transition-all duration-300 flex flex-col h-full relative group cursor-pointer overflow-hidden ${product.isFeatured ? 'border-yellow-200 ring-1 ring-yellow-50' : 'border-gray-100'}`}
     >
       {/* Badges Overlay */}
       <div className="absolute top-3 left-3 z-10 flex flex-col gap-1.5 items-start pointer-events-none">
@@ -70,11 +81,11 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
       )}
       
       {/* Image Area */}
-      <div className="relative mb-4 flex-shrink-0 overflow-hidden rounded-xl h-48 bg-gray-50 flex items-center justify-center group-hover:bg-gray-100 transition-colors">
+      <div className="relative h-48 bg-gray-50 flex items-center justify-center p-4 overflow-hidden group-hover:bg-gray-100 transition-colors">
         <img 
           src={displayImage} 
           alt={product.name} 
-          className="w-full h-full object-contain group-hover:scale-110 transition duration-700 p-4 mix-blend-multiply" 
+          className="w-full h-full object-contain group-hover:scale-110 transition duration-700 mix-blend-multiply" 
         />
         
         {/* Quick View Button (Hover) */}
@@ -84,7 +95,7 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
               e.stopPropagation();
               onQuickView(product);
             }}
-            className="bg-white text-gray-800 px-5 py-2.5 rounded-full shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#0056b3] hover:text-white transition-all transform translate-y-4 group-hover:translate-y-0 duration-300 active:scale-95 border border-gray-100"
+            className="bg-white text-gray-800 px-4 py-2 rounded-full shadow-lg font-bold text-xs flex items-center gap-2 hover:bg-[#0056b3] hover:text-white transition-all transform translate-y-4 group-hover:translate-y-0 duration-300 active:scale-95 border border-gray-100"
           >
             <Eye size={14} /> ดูตัวอย่าง
           </button>
@@ -92,33 +103,37 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
       </div>
       
       {/* Content Area */}
-      <div className="flex-1 flex flex-col">
-        {/* Category & Brand */}
-        <div className="flex justify-between items-center mb-2">
-           <span className="text-[10px] text-gray-500 font-medium bg-gray-100 px-2 py-0.5 rounded-md">{product.category}</span>
+      <div className="p-4 flex flex-col flex-1">
+        {/* Category */}
+        <div className="mb-1">
+           <span className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">{product.category}</span>
         </div>
 
         {/* Product Name */}
-        <h3 className="text-gray-800 text-sm font-bold line-clamp-2 min-h-[2.5em] mb-2 group-hover:text-[#0056b3] transition-colors leading-relaxed">
+        <h3 className="text-gray-800 text-sm font-bold line-clamp-2 h-10 mb-2 leading-snug group-hover:text-[#0056b3] transition-colors" title={product.name}>
           {product.name}
         </h3>
         
         {/* Stock Status Indicator */}
-        <div className="mb-3 h-6">
-           <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-bold border transition-colors duration-300 ${stockInfo.color}`}>
+        <div className="mb-3">
+           <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold border transition-colors duration-300 ${stockInfo.color}`}>
               <div className={`w-1.5 h-1.5 rounded-full ${stockInfo.dot}`}></div>
               {stockInfo.label}
            </div>
         </div>
 
+        {/* Spacer to push variants and price to bottom */}
+        <div className="flex-1" />
+
         {/* Variant Selector */}
-        <div className="mt-auto">
+        <div className="min-h-[40px] mb-2 flex items-end w-full">
           {hasVariants ? (
-            <div className="mb-3 min-h-[36px]" onClick={e => e.stopPropagation()}>
+            <div className="w-full">
               {!showVariantThumbnails && product.variants!.length > 6 ? (
-                 <div className="relative">
+                 <div className="relative w-full">
                     <select 
                       className="w-full text-[11px] border border-gray-200 rounded-lg py-1.5 pl-2 pr-6 appearance-none bg-gray-50 focus:bg-white focus:ring-1 focus:ring-blue-500 outline-none cursor-pointer text-gray-700 font-medium transition-shadow hover:shadow-sm"
+                      onClick={(e) => e.stopPropagation()}
                       onChange={(e) => {
                          const v = product.variants!.find(v => v.id === e.target.value);
                          setSelectedVariant(v || null);
@@ -133,53 +148,61 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
                     <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                  </div>
               ) : (
-                  <div className="flex flex-wrap gap-2">
-                      {product.variants!.map(variant => (
+                  <div className="flex flex-wrap gap-1.5">
+                      {product.variants!.map(variant => {
+                        const isSelected = selectedVariant?.id === variant.id;
+                        const isSwatch = showVariantThumbnails && variant.image;
+
+                        return (
                           <button 
                               key={variant.id}
-                              onClick={() => setSelectedVariant(variant)}
+                              onClick={(e) => handleVariantClick(e, variant)}
                               onMouseEnter={() => setHoveredVariant(variant)}
                               onMouseLeave={() => setHoveredVariant(null)}
-                               className={`group relative rounded-lg transition-all duration-200 border-2 overflow-hidden ${
-                                  selectedVariant?.id === variant.id 
-                                  ? 'border-blue-600 shadow-md ring-1 ring-blue-200' 
-                                  : 'border-transparent hover:border-blue-200 bg-gray-100'
-                               } ${showVariantThumbnails && variant.image ? 'w-9 h-9 p-0.5' : 'px-2 py-1'}`}
-                               title={variant.name}
+                              className={`
+                                group relative transition-all duration-200 border overflow-hidden
+                                ${isSwatch ? 'w-8 h-8 rounded-full p-0.5' : 'px-2 py-1 rounded-lg min-w-[32px]'}
+                                ${isSelected 
+                                  ? 'border-blue-600 ring-1 ring-blue-600 bg-blue-50 shadow-sm' 
+                                  : 'border-gray-200 hover:border-blue-400 bg-white hover:shadow-sm'
+                                }
+                              `}
+                              title={variant.name}
                           >
-                              {showVariantThumbnails && variant.image ? (
+                              {isSwatch ? (
                                 <>
                                   <img 
                                       src={variant.image} 
                                       alt={variant.name} 
-                                      className="w-full h-full object-cover rounded-md" 
+                                      className="w-full h-full object-cover rounded-full" 
                                   />
-                                  {selectedVariant?.id === variant.id && (
-                                    <div className="absolute inset-0 bg-blue-600/20 flex items-center justify-center backdrop-blur-[0.5px]">
-                                      <div className="bg-blue-600 rounded-full p-0.5 shadow-sm">
-                                        <Check size={8} className="text-white" strokeWidth={4} />
-                                      </div>
+                                  {isSelected && (
+                                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center rounded-full">
+                                      <Check size={12} className="text-white drop-shadow-md" strokeWidth={3} />
                                     </div>
                                   )}
                                 </>
                               ) : (
-                                  <span className={`text-[10px] font-bold block whitespace-nowrap ${selectedVariant?.id === variant.id ? 'text-blue-700' : 'text-gray-600'}`}>
+                                  <span className={`text-[10px] font-bold block whitespace-nowrap ${isSelected ? 'text-blue-700' : 'text-gray-600'}`}>
                                       {variant.name}
                                   </span>
                               )}
                           </button>
-                      ))}
+                        );
+                      })}
                   </div>
               )}
             </div>
           ) : (
-             <div className="mb-3 min-h-[36px]" /> 
+             // Placeholder to maintain height if needed, or just allow collapse
+             <div className="w-full" /> 
           )}
+        </div>
 
-          {/* Price & Cart Actions */}
-          <div className="flex items-center justify-between gap-2">
+        {/* Price & Cart Actions */}
+        <div className="pt-3 border-t border-gray-50 flex items-center justify-between gap-2 mt-auto">
             <div className="flex flex-col">
-              <div className="flex items-baseline gap-1.5 h-7">
+              <div className="flex items-baseline gap-1.5">
                 <span className="text-[#0056b3] text-lg font-black transition-all duration-300 transform">
                   ฿{displayPrice.toLocaleString()}
                 </span>
@@ -188,7 +211,7 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
                 )}
               </div>
               {!selectedVariant && hasVariants && !hoveredVariant && (
-                 <span className="text-[9px] text-orange-500 font-bold -mt-1 animate-pulse">ราคาเริ่มต้น</span>
+                 <span className="text-[9px] text-orange-500 font-bold -mt-0.5 animate-pulse">ราคาเริ่มต้น</span>
               )}
             </div>
 
@@ -197,17 +220,14 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
                  e.stopPropagation();
                  if (currentStock > 0) {
                     if (hasVariants && !selectedVariant) {
-                       // If variants exist but none selected, maybe prompt or just add default?
-                       // For UX, better to open QuickView or require selection.
-                       // Here we'll just alert for demo.
-                       alert('กรุณาเลือกแบบสินค้าก่อน');
+                       alert('กรุณาเลือกตัวเลือกสินค้าก่อน (สี/ขนาด)');
                        return;
                     }
                     alert(`เพิ่ม ${product.name} ${selectedVariant ? `(${selectedVariant.name})` : ''} ลงตะกร้า`);
                  }
               }}
               disabled={currentStock === 0}
-              className={`w-9 h-9 flex items-center justify-center rounded-full transition-all shadow-sm ${
+              className={`w-9 h-9 flex items-center justify-center rounded-full transition-all shadow-sm flex-shrink-0 ${
                   currentStock === 0 
                   ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
                   : hasVariants && !selectedVariant 
@@ -216,131 +236,8 @@ const ProductCard: React.FC<{ product: Product; onQuickView: (p: Product) => voi
               }`}
               title={currentStock === 0 ? 'สินค้าหมด' : 'เพิ่มลงตะกร้า'}
             >
-              <ShoppingCart size={16} /> 
+              <ShoppingCart size={18} /> 
             </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const ProductQuickViewModal: React.FC<{ product: Product | null; onClose: () => void }> = ({ product, onClose }) => {
-  if (!product) return null;
-
-  const [selectedVariant, setSelectedVariant] = useState<ProductVariant | null>(null);
-  const displayPrice = selectedVariant ? selectedVariant.price : product.price;
-  const displayImage = selectedVariant?.image ? selectedVariant.image : product.image;
-
-  // Use real description if available, otherwise fallback
-  const description = product.description || `พบกับนวัตกรรมใหม่แห่งการอยู่อาศัย ด้วย ${product.name} ที่ได้รับการออกแบบมาอย่างพิถีพิถัน เพื่อตอบโจทย์ทุกความต้องการของบ้านคุณ สินค้าคุณภาพสูงในหมวด ${product.category} มั่นใจได้ในความทนทานและประสิทธิภาพการใช้งานที่ยาวนาน`;
-
-  // Determine if we should show image thumbnails for variants in Modal
-  const showVariantThumbnails = product.variants?.some(v => v.image);
-
-  return (
-    <div className="fixed inset-0 z-[150] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300" onClick={onClose} />
-      <div className="relative bg-white w-full max-w-4xl rounded-[2rem] shadow-2xl overflow-hidden flex flex-col md:flex-row animate-in zoom-in-95 duration-300">
-        <button 
-          onClick={onClose} 
-          className="absolute top-4 right-4 z-20 bg-gray-100 hover:bg-gray-200 text-gray-500 p-2 rounded-full transition-all active:scale-90"
-        >
-          <X size={24} />
-        </button>
-
-        {/* Left: Image */}
-        <div className="w-full md:w-1/2 bg-gray-50 p-8 flex items-center justify-center relative overflow-hidden">
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-white to-gray-100 opacity-50"></div>
-          <img src={displayImage} alt={product.name} className="max-w-full max-h-[400px] object-contain drop-shadow-2xl relative z-10 hover:scale-110 transition duration-700" />
-        </div>
-
-        {/* Right: Info */}
-        <div className="w-full md:w-1/2 p-8 md:p-12 overflow-y-auto max-h-[80vh] no-scrollbar bg-white">
-          <div className="mb-2">
-            <span className="bg-blue-100 text-blue-600 text-[10px] font-black px-3 py-1 rounded-full uppercase tracking-widest">{product.category}</span>
-          </div>
-          <h2 className="text-2xl md:text-3xl font-black text-gray-900 mb-2 leading-tight">{product.name}</h2>
-          
-          <div className="flex items-center gap-2 mb-4">
-            <div className="flex text-yellow-400">
-              {[...Array(5)].map((_, i) => <Star key={i} size={16} fill={i < 4 ? "currentColor" : "none"} />)}
-            </div>
-            <span className="text-xs text-gray-400 font-bold">(4.8 / 5 รีวิวลูกค้า)</span>
-          </div>
-
-          <p className="text-sm text-gray-500 mb-6 leading-relaxed border-l-2 border-gray-200 pl-3">
-             {description}
-          </p>
-
-          <div className="bg-blue-50/50 p-6 rounded-2xl mb-8 border border-blue-100/50">
-            <div className="flex items-baseline gap-3 mb-2">
-               <span className="text-4xl font-black text-blue-600">฿{displayPrice.toLocaleString()}</span>
-               {product.originalPrice && (
-                 <span className="text-lg text-gray-400 line-through italic font-medium">฿{product.originalPrice.toLocaleString()}</span>
-               )}
-            </div>
-            {product.discount && (
-              <span className="text-xs bg-red-100 text-red-600 px-2 py-1 rounded-md font-bold uppercase tracking-tighter animate-pulse">
-                ประหยัด {product.discount}% ทันที
-              </span>
-            )}
-          </div>
-
-          {product.variants && product.variants.length > 0 && (
-            <div className="mb-8">
-              <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">เลือกตัวเลือกสินค้า:</h4>
-              <div className="flex flex-wrap gap-3">
-                {product.variants.map((v) => (
-                  <button 
-                    key={v.id} 
-                    onClick={() => setSelectedVariant(v)}
-                    className={`
-                        relative transition-all duration-200 border-2
-                        ${showVariantThumbnails && v.image ? 'w-16 h-16 rounded-xl p-1' : 'px-4 py-2.5 rounded-xl font-bold text-sm'}
-                        ${selectedVariant?.id === v.id 
-                            ? 'border-blue-600 bg-blue-50 text-blue-600 shadow-md ring-2 ring-blue-100' 
-                            : 'border-gray-100 hover:border-gray-300 text-gray-600'}
-                    `}
-                    title={v.name}
-                  >
-                    {showVariantThumbnails && v.image ? (
-                        <>
-                            <img src={v.image} alt={v.name} className="w-full h-full object-cover rounded-lg" />
-                            {selectedVariant?.id === v.id && (
-                                <div className="absolute top-0 right-0 bg-blue-600 text-white rounded-bl-lg rounded-tr-sm p-0.5">
-                                    <Check size={10} />
-                                </div>
-                            )}
-                        </>
-                    ) : v.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="space-y-4 mb-8">
-             <div className="flex items-center gap-3 text-sm font-medium text-gray-600">
-                <Truck size={18} className="text-blue-500" />
-                <span>จัดส่งฟรีเมื่อซื้อครบ ฿500 ขึ้นไป</span>
-             </div>
-             <div className="flex items-center gap-3 text-sm font-medium text-gray-600">
-                <ShieldCheck size={18} className="text-green-500" />
-                <span>รับประกันศูนย์ไทย 1 ปีเต็ม</span>
-             </div>
-          </div>
-
-          <div className="flex gap-4">
-            <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-               <button className="p-3 hover:bg-gray-50 transition text-gray-400"><Minus size={18} /></button>
-               <span className="px-4 font-black text-lg">1</span>
-               <button className="p-3 hover:bg-gray-50 transition text-gray-400"><Plus size={18} /></button>
-            </div>
-            <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-black flex items-center justify-center gap-3 shadow-xl hover:shadow-blue-200 transition-all active:scale-95">
-              <ShoppingCart size={22} /> เพิ่มลงรถเข็น
-            </button>
-          </div>
         </div>
       </div>
     </div>

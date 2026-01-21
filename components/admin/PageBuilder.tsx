@@ -5,11 +5,12 @@ import { aiService } from '../../services/aiService';
 import { Page, PageBlock, BlockType } from '../../types';
 import { 
   Plus, Search, Edit, Trash2, Save, ArrowLeft, 
-  MoveUp, MoveDown, Layout, Type, Image as ImageIcon, 
-  ShoppingBag, Eye, FileText, Globe, CheckCircle, GripVertical,
-  Sparkles, Loader2, X, LayoutGrid, Columns, Monitor
+  Layout, Type, Image as ImageIcon, 
+  ShoppingBag, FileText, Globe, 
+  Sparkles, Loader2, X, LayoutGrid, MessageSquareQuote,
+  Wand2, MoveDown
 } from 'lucide-react';
-import { ImageManager } from './ImageManager';
+import { BlockEditor, ToolboxItem, getDefaultBlockData } from './EditorComponents';
 
 export const PageBuilder: React.FC = () => {
   const [view, setView] = useState<'list' | 'edit'>('list');
@@ -21,10 +22,16 @@ export const PageBuilder: React.FC = () => {
   const [blocks, setBlocks] = useState<PageBlock[]>([]);
   const [pageMeta, setPageMeta] = useState({ title: '', slug: '', status: 'draft' });
 
-  // AI State
+  // AI Layout State
   const [isAiModalOpen, setIsAiModalOpen] = useState(false);
   const [aiPrompt, setAiPrompt] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
+
+  // AI Single Block State
+  const [isAiBlockModalOpen, setIsAiBlockModalOpen] = useState(false);
+  const [aiBlockType, setAiBlockType] = useState<BlockType>('hero');
+  const [aiBlockPrompt, setAiBlockPrompt] = useState('');
+  const [isGeneratingBlock, setIsGeneratingBlock] = useState(false);
 
   useEffect(() => {
     refreshPages();
@@ -35,16 +42,20 @@ export const PageBuilder: React.FC = () => {
   };
 
   const handleCreateNew = () => {
+    // Attempt to load default layout
+    const defaultLayout = db.getDefaultLayout();
+    const initialBlocks = defaultLayout ? JSON.parse(JSON.stringify(defaultLayout.blocks)) : [];
+
     const newPage: Page = {
       id: `page-${Date.now()}`,
       title: 'Untitled Page',
       slug: `new-page-${Date.now()}`,
-      blocks: [],
+      blocks: initialBlocks,
       status: 'draft',
       updatedAt: new Date().toISOString()
     };
     setCurrentPage(newPage);
-    setBlocks([]);
+    setBlocks(initialBlocks);
     setPageMeta({ title: newPage.title, slug: newPage.slug, status: 'draft' });
     setView('edit');
   };
@@ -84,7 +95,7 @@ export const PageBuilder: React.FC = () => {
     setView('list');
   };
 
-  // AI Generation Handler
+  // AI Layout Generation Handler
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
     
@@ -103,6 +114,28 @@ export const PageBuilder: React.FC = () => {
       alert('Error generating layout');
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  // AI Single Block Generation Handler
+  const handleAiBlockGenerate = async () => {
+    if (!aiBlockPrompt.trim()) return;
+
+    setIsGeneratingBlock(true);
+    try {
+      const block = await aiService.generateBlock(aiBlockType, aiBlockPrompt);
+      if (block) {
+        setBlocks(prev => [...prev, block]);
+        setIsAiBlockModalOpen(false);
+        setAiBlockPrompt('');
+      } else {
+        alert('AI could not generate the block. Please try again.');
+      }
+    } catch (error) {
+      console.error(error);
+      alert('Error generating block');
+    } finally {
+      setIsGeneratingBlock(false);
     }
   };
 
@@ -130,18 +163,6 @@ export const PageBuilder: React.FC = () => {
     if (targetIndex >= 0 && targetIndex < newBlocks.length) {
       [newBlocks[index], newBlocks[targetIndex]] = [newBlocks[targetIndex], newBlocks[index]];
       setBlocks(newBlocks);
-    }
-  };
-
-  const getDefaultBlockData = (type: BlockType) => {
-    switch (type) {
-      case 'hero': return { title: 'Hero Title', subtitle: 'Subtitle goes here', image: '', buttonText: 'Click Me' };
-      case 'text': return { content: '<h2>Heading</h2><p>Write your content here...</p>' };
-      case 'product-row': return { title: 'Featured Products', category: 'All', count: 4 };
-      case 'image': return { url: '', alt: '', caption: '' };
-      case 'spacer': return { height: 50 };
-      case 'grid': return { columns: 3, items: [{ title: 'Feature 1', description: 'Description', image: '' }, { title: 'Feature 2', description: 'Description', image: '' }, { title: 'Feature 3', description: 'Description', image: '' }] };
-      default: return {};
     }
   };
 
@@ -228,12 +249,12 @@ export const PageBuilder: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-3">
-           {/* AI Trigger */}
+           {/* AI Trigger (Layout) */}
            <button 
              onClick={() => setIsAiModalOpen(true)}
              className="flex items-center gap-2 bg-gradient-to-r from-purple-600 to-indigo-600 text-white px-4 py-2 rounded-lg font-bold hover:shadow-lg hover:from-purple-700 hover:to-indigo-700 transition active:scale-95"
            >
-             <Sparkles size={18} /> AI Assistant
+             <Sparkles size={18} /> AI Layout
            </button>
 
            <div className="flex items-center bg-gray-100 rounded-lg p-1">
@@ -263,10 +284,26 @@ export const PageBuilder: React.FC = () => {
               <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wider">Add Block</h3>
            </div>
            <div className="p-4 space-y-3 overflow-y-auto">
+              <button 
+                onClick={() => {
+                  setAiBlockType('hero');
+                  setAiBlockPrompt("A hero block for a 'new arrivals' promotion with a vibrant image and a call to action button");
+                  setIsAiBlockModalOpen(true);
+                }} 
+                className="w-full flex items-center gap-3 p-3 rounded-lg border-2 border-purple-100 bg-purple-50 text-purple-700 hover:bg-purple-100 transition group text-left shadow-sm"
+              >
+                <div className="text-purple-600"><Wand2 size={20} /></div>
+                <span className="text-sm font-bold">AI Magic Block</span>
+                <Plus size={14} className="ml-auto opacity-0 group-hover:opacity-100 transition" />
+              </button>
+
+              <div className="h-px bg-gray-100 my-2" />
+
               <ToolboxItem icon={<Layout />} label="Hero Banner" onClick={() => addBlock('hero')} />
               <ToolboxItem icon={<Type />} label="Text Content" onClick={() => addBlock('text')} />
               <ToolboxItem icon={<LayoutGrid />} label="Feature Grid" onClick={() => addBlock('grid')} />
               <ToolboxItem icon={<ShoppingBag />} label="Product Row" onClick={() => addBlock('product-row')} />
+              <ToolboxItem icon={<MessageSquareQuote />} label="Testimonials" onClick={() => addBlock('testimonial')} />
               <ToolboxItem icon={<ImageIcon />} label="Image" onClick={() => addBlock('image')} />
               <ToolboxItem icon={<MoveDown />} label="Spacer" onClick={() => addBlock('spacer')} />
            </div>
@@ -323,7 +360,7 @@ export const PageBuilder: React.FC = () => {
         </div>
       </div>
 
-      {/* AI Modal */}
+      {/* AI Layout Modal */}
       {isAiModalOpen && (
         <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
           <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
@@ -349,7 +386,6 @@ export const PageBuilder: React.FC = () => {
                 <span className="text-xs font-bold text-gray-400 uppercase">Try:</span>
                 <button onClick={() => setAiPrompt("Home page for high-end water filters")} className="text-xs bg-gray-100 hover:bg-purple-100 text-gray-600 hover:text-purple-700 px-2 py-1 rounded transition">Water Filters Page</button>
                 <button onClick={() => setAiPrompt("About Us page with company history")} className="text-xs bg-gray-100 hover:bg-purple-100 text-gray-600 hover:text-purple-700 px-2 py-1 rounded transition">About Us</button>
-                <button onClick={() => setAiPrompt("Service page with 3 columns feature grid")} className="text-xs bg-gray-100 hover:bg-purple-100 text-gray-600 hover:text-purple-700 px-2 py-1 rounded transition">Feature Grid</button>
               </div>
 
               <div className="mt-6 flex justify-end gap-3">
@@ -366,209 +402,60 @@ export const PageBuilder: React.FC = () => {
           </div>
         </div>
       )}
-    </div>
-  );
-};
 
-const ToolboxItem: React.FC<{ icon: React.ReactNode; label: string; onClick: () => void }> = ({ icon, label, onClick }) => (
-  <button onClick={onClick} className="w-full flex items-center gap-3 p-3 rounded-lg border border-gray-100 hover:border-blue-500 hover:bg-blue-50 hover:text-blue-700 transition group text-left">
-    <div className="text-gray-400 group-hover:text-blue-600">{icon}</div>
-    <span className="text-sm font-medium text-gray-600 group-hover:text-blue-700">{label}</span>
-    <Plus size={14} className="ml-auto opacity-0 group-hover:opacity-100 transition" />
-  </button>
-);
-
-const BlockEditor: React.FC<{ 
-  block: PageBlock; 
-  index: number; 
-  total: number;
-  onUpdate: (data: any) => void;
-  onRemove: () => void;
-  onMove: (dir: 'up' | 'down') => void;
-}> = ({ block, index, total, onUpdate, onRemove, onMove }) => {
-  
-  const updateGridItem = (itemIndex: number, field: string, value: any) => {
-      const items = [...(block.data.items || [])];
-      items[itemIndex] = { ...items[itemIndex], [field]: value };
-      onUpdate({ items });
-  };
-
-  const addGridItem = () => {
-      onUpdate({ items: [...(block.data.items || []), { title: 'New Item', description: 'Description', image: '' }] });
-  };
-  
-  const removeGridItem = (idx: number) => {
-      const items = [...(block.data.items || [])];
-      items.splice(idx, 1);
-      onUpdate({ items });
-  };
-
-  return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden group hover:shadow-md transition-all">
-       {/* Block Header */}
-       <div className="bg-gray-50 border-b px-4 py-2 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-             <GripVertical size={16} className="text-gray-300 cursor-grab" />
-             <span className="text-xs font-bold uppercase text-gray-500 bg-gray-200 px-2 py-0.5 rounded">{block.type}</span>
-          </div>
-          <div className="flex items-center gap-1 opacity-50 group-hover:opacity-100 transition">
-             <button onClick={() => onMove('up')} disabled={index === 0} className="p-1 hover:bg-gray-200 rounded disabled:opacity-30"><MoveUp size={14}/></button>
-             <button onClick={() => onMove('down')} disabled={index === total - 1} className="p-1 hover:bg-gray-200 rounded disabled:opacity-30"><MoveDown size={14}/></button>
-             <button onClick={onRemove} className="p-1 hover:bg-red-100 text-red-500 rounded ml-2"><Trash2 size={14}/></button>
-          </div>
-       </div>
-
-       {/* Block Content Form */}
-       <div className="p-6">
-          {block.type === 'hero' && (
-            <div className="grid grid-cols-2 gap-4">
-               <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">Title</label>
-                  <input className="w-full border rounded p-2 text-sm" value={block.data.title} onChange={e => onUpdate({ title: e.target.value })} />
-               </div>
-               <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">Subtitle</label>
-                  <input className="w-full border rounded p-2 text-sm" value={block.data.subtitle} onChange={e => onUpdate({ subtitle: e.target.value })} />
-               </div>
-               <div className="col-span-2">
-                  <ImageManager images={block.data.image ? [block.data.image] : []} onChange={imgs => onUpdate({ image: imgs[0] || '' })} label="Background Image" multiple={false} />
-               </div>
-               <div>
-                  <label className="block text-xs font-bold text-gray-500 mb-1">Button Text</label>
-                  <input className="w-full border rounded p-2 text-sm" value={block.data.buttonText} onChange={e => onUpdate({ buttonText: e.target.value })} />
-               </div>
+      {/* AI Single Block Modal */}
+      {isAiBlockModalOpen && (
+        <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-gradient-to-r from-pink-600 to-purple-600 p-6 text-white flex justify-between items-start">
+              <div>
+                <h3 className="font-bold text-xl flex items-center gap-2"><Wand2 size={24} className="text-yellow-300" /> AI Block Generator</h3>
+                <p className="text-purple-100 text-sm mt-1">Create a specific block with custom content and style.</p>
+              </div>
+              <button onClick={() => setIsAiBlockModalOpen(false)} className="bg-white/10 hover:bg-white/20 p-1.5 rounded-full transition"><X size={20} /></button>
             </div>
-          )}
-
-          {block.type === 'text' && (
-             <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">HTML Content</label>
-                <textarea 
-                  className="w-full border rounded p-2 text-sm h-32 font-mono" 
-                  value={block.data.content} 
-                  onChange={e => onUpdate({ content: e.target.value })} 
-                />
-                <p className="text-xs text-gray-400 mt-1">Supports Basic HTML tags (h1, p, b, i, ul, li)</p>
-             </div>
-          )}
-
-          {block.type === 'image' && (
-             <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                   <ImageManager images={block.data.url ? [block.data.url] : []} onChange={imgs => onUpdate({ url: imgs[0] || '' })} label="Image" multiple={false} />
-                </div>
-                <div>
-                   <label className="block text-xs font-bold text-gray-500 mb-1">Alt Text</label>
-                   <input className="w-full border rounded p-2 text-sm" value={block.data.alt} onChange={e => onUpdate({ alt: e.target.value })} />
-                </div>
-                <div>
-                   <label className="block text-xs font-bold text-gray-500 mb-1">Caption</label>
-                   <input className="w-full border rounded p-2 text-sm" value={block.data.caption} onChange={e => onUpdate({ caption: e.target.value })} />
-                </div>
-             </div>
-          )}
-
-          {block.type === 'grid' && (
-             <div className="space-y-4">
-                <div>
-                    <label className="block text-xs font-bold text-gray-500 mb-2">Columns</label>
-                    <div className="flex gap-2">
-                        {[2, 3, 4].map(num => (
-                            <button 
-                                key={num}
-                                onClick={() => onUpdate({ columns: num })}
-                                className={`px-4 py-2 border rounded-lg text-sm font-bold flex items-center gap-2 ${block.data.columns === num ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
-                            >
-                                <Columns size={16} /> {num} Cols
-                            </button>
-                        ))}
-                    </div>
-                </div>
-                
-                <div className="space-y-3">
-                    <label className="block text-xs font-bold text-gray-500">Grid Items</label>
-                    {block.data.items?.map((item: any, idx: number) => (
-                        <div key={idx} className="border rounded-xl p-4 bg-gray-50 relative group/item">
-                            <button onClick={() => removeGridItem(idx)} className="absolute top-2 right-2 text-gray-400 hover:text-red-500"><X size={14}/></button>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="space-y-3">
-                                    <input 
-                                        className="w-full border rounded p-2 text-sm" 
-                                        placeholder="Item Title"
-                                        value={item.title} 
-                                        onChange={e => updateGridItem(idx, 'title', e.target.value)} 
-                                    />
-                                    <textarea 
-                                        className="w-full border rounded p-2 text-sm h-20 resize-none" 
-                                        placeholder="Description..."
-                                        value={item.description} 
-                                        onChange={e => updateGridItem(idx, 'description', e.target.value)} 
-                                    />
-                                </div>
-                                <div>
-                                    <ImageManager 
-                                        images={item.image ? [item.image] : []} 
-                                        onChange={imgs => updateGridItem(idx, 'image', imgs[0] || '')} 
-                                        label="Icon/Image" 
-                                        multiple={false} 
-                                    />
-                                </div>
-                            </div>
-                        </div>
+            
+            <div className="p-6 space-y-4">
+              <div>
+                 <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Block Type</label>
+                 <div className="grid grid-cols-3 gap-2">
+                    {['hero', 'text', 'product-row', 'image', 'grid', 'testimonial'].map((t) => (
+                       <button 
+                         key={t}
+                         onClick={() => setAiBlockType(t as BlockType)}
+                         className={`px-3 py-2 rounded-lg text-xs font-bold border transition ${aiBlockType === t ? 'bg-purple-50 border-purple-500 text-purple-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+                       >
+                         {t.charAt(0).toUpperCase() + t.slice(1)}
+                       </button>
                     ))}
-                    <button onClick={addGridItem} className="w-full py-2 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 font-bold hover:border-blue-500 hover:text-blue-600 transition flex items-center justify-center gap-2">
-                        <Plus size={16} /> Add Grid Item
-                    </button>
-                </div>
-             </div>
-          )}
+                 </div>
+              </div>
 
-          {block.type === 'product-row' && (
-             <div className="grid grid-cols-2 gap-4">
-                <div>
-                   <label className="block text-xs font-bold text-gray-500 mb-1">Section Title</label>
-                   <input className="w-full border rounded p-2 text-sm" value={block.data.title} onChange={e => onUpdate({ title: e.target.value })} />
-                </div>
-                <div>
-                   <label className="block text-xs font-bold text-gray-500 mb-1">Category Filter</label>
-                   <select className="w-full border rounded p-2 text-sm" value={block.data.category} onChange={e => onUpdate({ category: e.target.value })}>
-                      <option value="All">All Categories</option>
-                      {db.getCategories().map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                   </select>
-                </div>
-             </div>
-          )}
+              <div>
+                <label className="block text-xs font-bold text-gray-500 uppercase mb-2">Description</label>
+                <textarea 
+                  value={aiBlockPrompt}
+                  onChange={(e) => setAiBlockPrompt(e.target.value)}
+                  placeholder={`Describe your ${aiBlockType} block... e.g. "Minimalist design with blue background"`}
+                  className="w-full border-2 border-purple-100 rounded-xl p-4 text-sm h-28 focus:ring-2 focus:ring-purple-500 outline-none resize-none bg-purple-50/30"
+                  disabled={isGeneratingBlock}
+                />
+              </div>
 
-          {block.type === 'spacer' && (
-             <div>
-                <label className="block text-xs font-bold text-gray-500 mb-1">Height (px)</label>
-                <div className="flex items-center gap-3">
-                   <input 
-                     type="range" 
-                     min="10" 
-                     max="300" 
-                     step="10"
-                     className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
-                     value={block.data.height || 50} 
-                     onChange={e => onUpdate({ height: parseInt(e.target.value) || 0 })} 
-                   />
-                   <div className="relative">
-                      <input 
-                        type="number" 
-                        className="w-20 border rounded p-2 text-sm text-center pr-6" 
-                        value={block.data.height || 50} 
-                        onChange={e => onUpdate({ height: parseInt(e.target.value) || 0 })} 
-                      />
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 pointer-events-none">px</span>
-                   </div>
-                </div>
-                <div className="flex justify-between text-[10px] text-gray-400 mt-1 px-1">
-                   <span>10px</span>
-                   <span>300px</span>
-                </div>
-             </div>
-          )}
-       </div>
+              <div className="flex justify-end gap-3 pt-2">
+                <button onClick={() => setIsAiBlockModalOpen(false)} disabled={isGeneratingBlock} className="px-4 py-2 text-gray-500 font-bold hover:bg-gray-100 rounded-lg transition">Cancel</button>
+                <button 
+                  onClick={handleAiBlockGenerate} 
+                  disabled={!aiBlockPrompt.trim() || isGeneratingBlock}
+                  className="px-6 py-2 bg-gradient-to-r from-pink-600 to-purple-600 text-white rounded-lg font-bold shadow-lg hover:shadow-purple-200 transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                >
+                  {isGeneratingBlock ? <><Loader2 size={18} className="animate-spin" /> Creating...</> : <><Wand2 size={18} /> Create Block</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
