@@ -1,4 +1,5 @@
 
+
 export interface ProductVariant {
   id: string;
   name: string;
@@ -46,9 +47,14 @@ export interface Banner {
   alt: string;
 }
 
+export interface SubCategoryItem {
+  label: string;
+  href?: string;
+}
+
 export interface SubCategory {
   title: string;
-  items: string[];
+  items: (string | SubCategoryItem)[];
 }
 
 export interface CategoryDetail {

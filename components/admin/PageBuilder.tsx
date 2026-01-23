@@ -287,7 +287,7 @@ export const PageBuilder: React.FC = () => {
               <button 
                 onClick={() => {
                   setAiBlockType('hero');
-                  setAiBlockPrompt("A hero block for a 'new arrivals' promotion with a vibrant image and a call to action button");
+                  setAiBlockPrompt("a hero block for a 'water tank promotion' with a relevant image and a clear call to action.");
                   setIsAiBlockModalOpen(true);
                 }} 
                 className="w-full flex items-center gap-3 p-3 rounded-lg border-2 border-purple-100 bg-purple-50 text-purple-700 hover:bg-purple-100 transition group text-left shadow-sm"

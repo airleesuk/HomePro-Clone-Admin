@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChevronRight, Zap, Droplets, Wrench, Grid, HardHat, Lightbulb, FlaskConical, Database, Utensils, Snowflake, Gauge, Bath, Truck, Recycle, Waves, GlassWater, ArrowDownToLine, Filter, Box, ArrowLeft, Home, Phone, FileText, Edit2, Settings } from 'lucide-react';
+import { X, ChevronRight, Zap, Droplets, Wrench, Grid, HardHat, Lightbulb, FlaskConical, Database, Utensils, Snowflake, Gauge, Bath, Truck, Recycle, Waves, GlassWater, ArrowDownToLine, Filter, Box, ArrowLeft, Home, Phone, FileText, Edit2, Settings, Info, MessageSquare } from 'lucide-react';
 import { db } from '../services/mockDb';
 import { Category } from '../types';
 import { MegaMenuEditModal } from './admin/MegaMenuEditModal';
@@ -186,7 +186,7 @@ export const MegaMenu: React.FC<MegaMenuProps> = ({ isOpen, onClose }) => {
                หมวดหมู่สินค้า
             </div>
 
-            <nav className="py-2 pb-20 md:pb-2">
+            <nav className="py-2">
               {categories.map((cat, idx) => (
                 <button 
                   key={cat.id} 
@@ -207,6 +207,20 @@ export const MegaMenu: React.FC<MegaMenuProps> = ({ isOpen, onClose }) => {
                 </button>
               ))}
             </nav>
+          </div>
+          
+          <div className="mt-auto shrink-0">
+            <div className="px-6 py-3 text-xs font-bold text-gray-400 uppercase tracking-wider bg-gray-50 md:bg-transparent border-t border-gray-200">
+              Quick Links
+            </div>
+            <div className="py-2 pb-safe md:pb-4">
+              <a href="#" className="flex items-center gap-4 px-6 py-3 text-sm text-gray-700 font-medium hover:bg-white hover:text-blue-600 transition-colors">
+                 <Info size={18} className="text-gray-400"/> About Us
+              </a>
+              <a href="#" className="flex items-center gap-4 px-6 py-3 text-sm text-gray-700 font-medium hover:bg-white hover:text-blue-600 transition-colors">
+                 <MessageSquare size={18} className="text-gray-400" /> Contact Us
+              </a>
+            </div>
           </div>
         </div>
 
@@ -279,12 +293,16 @@ export const MegaMenu: React.FC<MegaMenuProps> = ({ isOpen, onClose }) => {
                       >
                         <h5 className="font-black text-gray-900 text-sm border-l-4 border-blue-600 pl-3 uppercase tracking-widest">{sub.title}</h5>
                         <ul className="space-y-2 text-[13px] text-gray-500 font-medium pl-1">
-                          {sub.items.map((link, lIdx) => (
-                            <li key={lIdx} className="hover:text-blue-600 hover:translate-x-1 cursor-pointer transition-all flex items-start gap-1.5 leading-relaxed py-0.5 group/item">
-                              <span className="text-blue-200 mt-0.5 group-hover/item:text-blue-500 transition-colors">•</span> 
-                              <a href="#" className="hover:underline decoration-blue-200 underline-offset-2">{link}</a>
-                            </li>
-                          ))}
+                          {sub.items.map((link, lIdx) => {
+                            const label = typeof link === 'string' ? link : link.label;
+                            const href = typeof link === 'string' ? '#' : link.href || '#';
+                            return (
+                                <li key={lIdx} className="hover:text-blue-600 hover:translate-x-1 cursor-pointer transition-all flex items-start gap-1.5 leading-relaxed py-0.5 group/item">
+                                <span className="text-blue-200 mt-0.5 group-hover/item:text-blue-500 transition-colors">•</span> 
+                                <a href={href} className="hover:underline decoration-blue-200 underline-offset-2">{label}</a>
+                                </li>
+                            );
+                          })}
                         </ul>
                       </div>
                     ))}

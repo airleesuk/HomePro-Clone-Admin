@@ -294,6 +294,7 @@ export const AdminPage: React.FC = () => {
   const updateMainDataFromVariants = (variants: ProductVariant[]) => {
     const totalStock = variants.reduce((sum, v) => sum + (Number(v.stock) || 0), 0);
     const validPrices = variants.map(v => Number(v.price) || Infinity).filter(p => p !== Infinity);
+    // FIX: Changed formData.price() to formData.price. It was incorrectly called as a function.
     const minVariantPrice = validPrices.length > 0 ? Math.min(...validPrices) : (formData.price || 0);
 
     return { totalStock, minVariantPrice };
@@ -786,7 +787,7 @@ export const AdminPage: React.FC = () => {
                                 setPreviewImage({ url: product.image, name: product.name });
                               }}
                            >
-                             <img src={product.image} className="w-full h-full object-contain rounded-md" alt={product.name} />
+                             <img src={product.image} className="w-full h-full object-contain rounded-md" alt={product.name} loading="lazy" />
                              {product.isFeatured && (
                                <div className="absolute -top-1.5 -right-1.5 bg-yellow-400 p-0.5 rounded-full shadow-sm ring-2 ring-white">
                                  <Star size={8} className="text-white fill-white" />

@@ -257,6 +257,85 @@ export class AiService {
       return null;
     }
   }
+
+  async generateBlockFromData(data: any[]): Promise<PageBlock | null> {
+    const systemInstruction = `
+      You are an expert web designer. Your goal is to generate a single JSON object for a web page block that best visualizes the provided JSON data array.
+
+      Available Block Types & Schemas:
+      - grid: { columns: number (choose 2, 3, or 4 based on content), items: Array<{ title: string, description: string, image: string }> }
+      - testimonial: { title: string, items: Array<{ name: string, role: string, quote: string, avatar: string }> }
+
+      Rules:
+      - Analyze the keys in the JSON data objects (e.g., 'name', 'price', 'image', 'description', 'quote').
+      - Choose the most appropriate block type ('grid' is a good default for product-like data, 'testimonial' for user-like data).
+      - Map the data from the array to the items in the block's data structure. For example, map 'name' to 'title', a concatenation of other fields like 'price' or 'category' to 'description', and 'image' to 'image'.
+      - Generate a suitable title for the block, like "Query Results".
+      - The output must be a valid JSON object for the PageBlock data.
+      - Do not wrap the JSON in an array or markdown code blocks. Return ONLY the raw JSON object.
+    `;
+
+    const content = `Here is the data from a SQL query. Generate a suitable block data object for it:\n\n${JSON.stringify(data.slice(0, 10), null, 2)} (Sampled to 10 rows)`;
+
+    try {
+      const response: GenerateContentResponse = await this.ai.models.generateContent({
+        model: 'gemini-3-flash-preview',
+        contents: content,
+        config: {
+          systemInstruction,
+          responseMimeType: "application/json",
+        },
+      });
+
+      const text = response.text;
+      if (!text) return null;
+      
+      const blockData = JSON.parse(text);
+      
+      let blockType: BlockType = 'grid';
+      if (blockData.items && blockData.items[0] && 'quote' in blockData.items[0]) {
+        blockType = 'testimonial';
+      }
+      
+      // We need to remap the full data into the structure the AI defined.
+      const aiItems = blockData.items;
+      if (!aiItems || aiItems.length === 0) return null;
+      
+      const keyMap: Record<string, string> = {};
+      const firstDataItem = data[0];
+      const firstAiItem = aiItems[0];
+
+      // Infer mapping from AI's first item
+      for (const aiKey in firstAiItem) {
+          // Find the original key that likely produced this value
+          for (const dataKey in firstDataItem) {
+              if (String(firstDataItem[dataKey]).includes(String(firstAiItem[aiKey])) || String(firstAiItem[aiKey]).includes(String(firstDataItem[dataKey]))) {
+                  keyMap[aiKey] = dataKey;
+                  break; // Simple first-match mapping
+              }
+          }
+      }
+
+      // Rebuild items with full data using the inferred map
+      const finalItems = data.map(dataItem => {
+          const newItem: Record<string, any> = {};
+          for (const aiKey in firstAiItem) {
+              newItem[aiKey] = dataItem[keyMap[aiKey]] || '';
+          }
+          return newItem;
+      });
+      
+      return {
+        id: `ai-data-block-${Date.now()}`,
+        type: blockType,
+        data: { ...blockData, items: finalItems }
+      };
+
+    } catch (error) {
+      console.error("AI Block from Data Gen Error:", error);
+      return null;
+    }
+  }
 }
 
 export const aiService = new AiService();
