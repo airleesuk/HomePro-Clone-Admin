@@ -10,7 +10,7 @@ export const Hero: React.FC = () => {
           {/* Main Banner Slider */}
           <div className="col-span-12 lg:col-span-8 relative rounded-lg overflow-hidden shadow-md group h-48 md:h-80 lg:h-96">
             <img 
-              src="https://images.unsplash.com/photo-1584622781564-1d9876a13d00?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80" 
+              src="https://waree-th.shop/resources/image/1b/95/0.png" 
               alt="Main Promo" 
               className="w-full h-full object-cover transition-transform duration-500 ease-in-out group-hover:scale-105"
             />

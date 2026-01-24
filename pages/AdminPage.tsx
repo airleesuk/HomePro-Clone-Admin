@@ -11,7 +11,8 @@ import { DatabaseManager } from '../components/admin/DatabaseManager';
 import { KeywordUrlGenerator } from '../components/admin/KeywordUrlGenerator';
 import { TemplateGenerator } from '../components/admin/TemplateGenerator';
 import { BlockGenerator } from '../components/admin/BlockGenerator';
-import { LayoutManager } from '../components/admin/LayoutManager'; // Import LayoutManager
+import { LayoutManager } from '../components/admin/LayoutManager';
+import { ContentManager } from '../components/admin/ContentManager';
 import { ProductQuickViewModal } from '../components/ProductQuickViewModal';
 import { 
   Package, Settings, Plus, Trash2, Edit, Save, X, Search, 
@@ -36,7 +37,9 @@ export const AdminPage: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
-  const [previewImage, setPreviewImage] = useState<{ url: string; name: string } | null>(null);
+  const [previewGallery, setPreviewGallery] = useState<{ images: string[]; name: string } | null>(null);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+
 
   // Filter & Search State
   const [productSearchQuery, setProductSearchQuery] = useState('');
@@ -81,16 +84,16 @@ export const AdminPage: React.FC = () => {
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        setPreviewImage(null);
+        setPreviewGallery(null);
       }
     };
-    if (previewImage) {
+    if (previewGallery) {
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [previewImage]);
+  }, [previewGallery]);
 
   useEffect(() => {
     generateNotifications();
@@ -531,12 +534,13 @@ export const AdminPage: React.FC = () => {
                {activeTab === 'categories' && 'Manage Mega Menu & Categories'}
                {activeTab === 'banners' && 'Manage Website Banners'}
                {activeTab === 'pagebuilder' && 'Manage Custom Pages & Content'}
+               {activeTab === 'content' && 'Manage sitewide text and image content'}
                {activeTab === 'database' && 'Execute SQL Queries & Manage Data'}
                {activeTab === 'seo' && 'Generate SEO-friendly Keyword URLs'}
                {activeTab === 'templates' && 'AI-Powered Page Layout Generator'}
                {activeTab === 'layouts' && 'Manage Page Layouts & Defaults'}
                {activeTab === 'blocks' && 'Generate & Manage Reusable UI Blocks'}
-               {['content','forms','emails'].includes(activeTab) && 'Module Management'}
+               {['forms','emails'].includes(activeTab) && 'Module Management'}
             </p>
           </div>
           
@@ -594,6 +598,8 @@ export const AdminPage: React.FC = () => {
         {activeTab === 'banners' && <BannerManager />}
 
         {activeTab === 'pagebuilder' && <PageBuilder />}
+
+        {activeTab === 'content' && <ContentManager />}
         
         {activeTab === 'database' && <DatabaseManager />}
 
@@ -605,7 +611,7 @@ export const AdminPage: React.FC = () => {
 
         {activeTab === 'blocks' && <BlockGenerator />}
 
-        {['content', 'forms', 'emails', 'settings'].includes(activeTab) && (
+        {['forms', 'emails', 'settings'].includes(activeTab) && (
            <div className="p-12 flex flex-col items-center justify-center h-[60vh] text-center">
               <div className="bg-gray-100 p-6 rounded-full mb-6">
                  <Settings size={48} className="text-gray-400 animate-spin-slow" />
@@ -628,7 +634,7 @@ export const AdminPage: React.FC = () => {
                   </div>
                   <input 
                      type="text" 
-                     placeholder="ค้นหาตามชื่อสินค้า, หมวดหมู่ หรือรหัสสินค้า (#123)..." 
+                     placeholder="ค้นหาตามชื่อสินค้า หรือ รหัสสินค้า..." 
                      value={productSearchQuery}
                      onChange={(e) => setProductSearchQuery(e.target.value)}
                      className="w-full pl-14 pr-12 py-4 bg-gray-50 border-2 border-transparent rounded-2xl focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-100 outline-none transition-all text-base font-medium shadow-inner"
@@ -784,13 +790,20 @@ export const AdminPage: React.FC = () => {
                               className="relative w-12 h-12 flex-shrink-0 bg-white rounded-lg border border-gray-100 p-1 group-hover:border-blue-300 transition-colors shadow-sm cursor-pointer"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setPreviewImage({ url: product.image, name: product.name });
+                                const imagesToShow = (product.images && product.images.length > 0) ? product.images : [product.image];
+                                setPreviewGallery({ images: imagesToShow, name: product.name });
+                                setGalleryIndex(0);
                               }}
                            >
                              <img src={product.image} className="w-full h-full object-contain rounded-md" alt={product.name} loading="lazy" />
                              {product.isFeatured && (
                                <div className="absolute -top-1.5 -right-1.5 bg-yellow-400 p-0.5 rounded-full shadow-sm ring-2 ring-white">
                                  <Star size={8} className="text-white fill-white" />
+                               </div>
+                             )}
+                             {product.images && product.images.length > 1 && (
+                               <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full ring-2 ring-white shadow">
+                                 +{product.images.length -1}
                                </div>
                              )}
                            </div>
@@ -1113,19 +1126,72 @@ export const AdminPage: React.FC = () => {
         />
       )}
 
-      {/* Image Preview Modal */}
-      {previewImage && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onClick={() => setPreviewImage(null)}>
-          <div className="relative max-w-4xl max-h-[90vh] w-auto h-auto animate-in zoom-in-95 duration-200">
-             <img src={previewImage.url} alt={previewImage.name} className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl" />
-             <button 
-               onClick={(e) => { e.stopPropagation(); setPreviewImage(null); }}
-               aria-label="Close image preview"
-               className="absolute -top-4 -right-4 bg-white text-gray-800 p-2 rounded-full shadow-lg hover:bg-gray-100 transition"
-             >
-               <X size={20} />
-             </button>
-          </div>
+      {/* Image Gallery Modal */}
+      {previewGallery && (
+        <div 
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" 
+            onClick={() => { setPreviewGallery(null); setGalleryIndex(0); }}
+        >
+            <div 
+                className="relative max-w-4xl max-h-[90vh] w-full flex flex-col gap-4" 
+                onClick={(e) => e.stopPropagation()}
+            >
+                {/* Main Image Viewer */}
+                <div className="relative animate-in zoom-in-95 duration-200">
+                    <div className="aspect-video bg-black/20 rounded-xl flex items-center justify-center">
+                        <img 
+                            src={previewGallery.images[galleryIndex]} 
+                            alt={`${previewGallery.name} - ${galleryIndex + 1}`} 
+                            className="max-w-full max-h-[70vh] object-contain rounded-lg" 
+                        />
+                    </div>
+                    {/* Close Button */}
+                    <button 
+                        onClick={() => { setPreviewGallery(null); setGalleryIndex(0); }}
+                        aria-label="Close image gallery"
+                        className="absolute -top-3 -right-3 bg-white text-gray-800 p-2 rounded-full shadow-lg hover:bg-gray-100 transition"
+                    >
+                        <X size={20} />
+                    </button>
+                    {/* Prev/Next Buttons */}
+                    {previewGallery.images.length > 1 && (
+                        <>
+                            <button 
+                                onClick={() => setGalleryIndex(prev => (prev - 1 + previewGallery.images.length) % previewGallery.images.length)}
+                                className="absolute top-1/2 left-4 -translate-y-1/2 bg-white/50 text-gray-800 p-2 rounded-full shadow-lg hover:bg-white transition"
+                                aria-label="Previous image"
+                            >
+                                <ChevronLeft size={24} />
+                            </button>
+                            <button 
+                                onClick={() => setGalleryIndex(prev => (prev + 1) % previewGallery.images.length)}
+                                className="absolute top-1/2 right-4 -translate-y-1/2 bg-white/50 text-gray-800 p-2 rounded-full shadow-lg hover:bg-white transition"
+                                aria-label="Next image"
+                            >
+                                <ChevronRight size={24} />
+                            </button>
+                        </>
+                    )}
+                </div>
+
+                {/* Thumbnail Strip */}
+                {previewGallery.images.length > 1 && (
+                    <div className="flex-shrink-0">
+                        <div className="flex justify-center gap-3 overflow-x-auto p-2 no-scrollbar">
+                            {previewGallery.images.map((img, idx) => (
+                                <button 
+                                    key={idx} 
+                                    onClick={() => setGalleryIndex(idx)}
+                                    className={`w-20 h-20 shrink-0 rounded-xl border-4 p-1 bg-white transition-all duration-200 ${galleryIndex === idx ? 'border-blue-500 scale-105 shadow-xl' : 'border-transparent opacity-60 hover:opacity-100 hover:border-gray-300'}`}
+                                    aria-label={`View image ${idx + 1}`}
+                                >
+                                    <img src={img} alt={`thumbnail ${idx + 1}`} className="w-full h-full object-cover rounded-md" />
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
       )}
     </div>

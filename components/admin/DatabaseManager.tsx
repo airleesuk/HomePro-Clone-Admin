@@ -4,7 +4,8 @@ import alasql from 'alasql';
 import { db } from '../../services/mockDb';
 import { aiService } from '../../services/aiService';
 import { BlockRenderer } from '../BlockRenderer';
-import { PageBlock, SavedBlock } from '../../types';
+// FIX: Added User and Order types to ensure proper type casting later.
+import { PageBlock, SavedBlock, User, Order, Product, Category, Brand } from '../../types';
 import { 
   Database, Play, Trash2, Search, Table, 
   Terminal, Sparkles, Loader2, RefreshCw, AlertCircle, Save,
@@ -98,11 +99,12 @@ export const DatabaseManager: React.FC = () => {
      try {
        const data = alasql(`SELECT * FROM ${tableName}`);
        switch(tableName) {
-          case 'products': db.setProducts(data); break;
-          case 'categories': db.setCategories(data); break;
-          case 'brands': db.setBrands(data); break;
-          case 'users': db.setUsers(data); break;
-          case 'orders': db.setOrders(data); break;
+          // FIX: Cast 'data' to the expected array types to satisfy TypeScript.
+          case 'products': db.setProducts(data as Product[]); break;
+          case 'categories': db.setCategories(data as Category[]); break;
+          case 'brands': db.setBrands(data as Brand[]); break;
+          case 'users': db.setUsers(data as User[]); break;
+          case 'orders': db.setOrders(data as Order[]); break;
        }
      } catch(e) { console.error("Sync error", e); }
   };
@@ -129,7 +131,8 @@ export const DatabaseManager: React.FC = () => {
     setGeneratedBlock(null);
     setError(null);
     try {
-      const data = alasql(generatorQuery);
+      // FIX: Explicitly type 'data' as any[] to resolve errors with .length and function arguments.
+      const data: any[] = alasql(generatorQuery);
       if (!data || data.length === 0) {
         setError("Query returned no data to generate a block from.");
         setIsGenerating(false);
@@ -187,7 +190,15 @@ export const DatabaseManager: React.FC = () => {
     setIsExportOpen(false);
   };
 
-  const getTableCount = (table: string) => (alasql(`SELECT COUNT(*) as count FROM ${table}`)[0] as any).count;
+  const getTableCount = (table: string) => {
+    try {
+      const results = alasql(`SELECT * FROM ${table}`);
+      return Array.isArray(results) ? results.length : 0;
+    } catch (e) {
+      // If table doesn't exist yet during initial render, return 0
+      return 0;
+    }
+  };
   const getTableLabel = (table: string) => table.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
 
   return (

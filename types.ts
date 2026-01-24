@@ -1,5 +1,4 @@
 
-
 export interface ProductVariant {
   id: string;
   name: string;
@@ -108,6 +107,16 @@ export enum ViewMode {
   ADMIN = 'ADMIN',
   PRODUCT_DETAIL = 'PRODUCT_DETAIL',
   PAGE_VIEW = 'PAGE_VIEW'
+}
+
+// New type for Content Management
+export interface ContentItem {
+  id: string;
+  key: string; // e.g., 'homepage.hero.title'
+  value: string; // The text content or image URL
+  type: 'text' | 'image' | 'rich-text';
+  description: string;
+  updatedAt: string;
 }
 
 // Page Builder Types

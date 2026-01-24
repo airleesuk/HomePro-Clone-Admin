@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Save, X, Plus, ArrowLeft, ArrowRight, Trash2, Layout, GripVertical, MoveUp, MoveDown } from 'lucide-react';
-import { Category, CategoryDetail } from '../../types';
+// FIX: SubCategoryItem is an object and needs to be handled differently from strings.
+import { Category, CategoryDetail, SubCategoryItem } from '../../types';
 import { db } from '../../services/mockDb';
 import { ImageManager } from './ImageManager';
 
@@ -54,7 +55,8 @@ export const MegaMenuEditModal: React.FC<MegaMenuEditModalProps> = ({ isOpen, on
         ...editingDetail,
         subCategories: editingDetail.subCategories.map(sub => ({
           ...sub,
-          items: sub.items.map(i => i.trim()).filter(i => i !== '')
+          // FIX: Check if item is a string before calling trim() to avoid errors on SubCategoryItem objects.
+          items: sub.items.map(i => (typeof i === 'string' ? i.trim() : i)).filter(i => (typeof i === 'string' ? i !== '' : true))
         }))
       };
       db.updateCategoryDetail(cleanedDetail);
@@ -134,7 +136,13 @@ export const MegaMenuEditModal: React.FC<MegaMenuEditModalProps> = ({ isOpen, on
     if (!editingDetail) return;
     const newSubs = [...editingDetail.subCategories];
     const newItems = [...newSubs[subIndex].items];
-    newItems[itemIndex] = value;
+    const currentItem = newItems[itemIndex];
+    // FIX: Handle updates for both string items and SubCategoryItem objects.
+    if (typeof currentItem === 'string') {
+        newItems[itemIndex] = value;
+    } else {
+        newItems[itemIndex] = { ...currentItem, label: value };
+    }
     newSubs[subIndex] = { ...newSubs[subIndex], items: newItems };
     setEditingDetail({ ...editingDetail, subCategories: newSubs });
   };
@@ -272,7 +280,8 @@ export const MegaMenuEditModal: React.FC<MegaMenuEditModalProps> = ({ isOpen, on
                                  <button onClick={() => moveSubCategoryItem(idx, itemIdx, 'down')} disabled={itemIdx === sub.items.length - 1} className="hover:text-purple-600 disabled:opacity-20"><MoveDown size={10}/></button>
                               </div>
                               <input 
-                                value={item}
+                                // FIX: Use item.label for objects and the string itself for string items.
+                                value={typeof item === 'string' ? item : item.label}
                                 onChange={(e) => updateSubCategoryItem(idx, itemIdx, e.target.value)}
                                 className="flex-1 border rounded px-2 py-1 text-xs focus:ring-1 focus:ring-purple-200 outline-none"
                                 placeholder="Item name"

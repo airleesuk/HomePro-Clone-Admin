@@ -1,7 +1,8 @@
 
 import { 
   Product, Category, Brand, Banner, Page, SavedBlock, 
-  User, Order, ProductVariant, CategoryDetail, PageLayout
+  User, Order, ProductVariant, CategoryDetail, PageLayout,
+  ContentItem
 } from '../types';
 
 export const CATEGORY_DETAILS: Record<number, CategoryDetail> = {
@@ -339,13 +340,113 @@ const MOCK_PRODUCTS: Product[] = [
         isFlashSale: true,
         description: 'เครื่องกรองน้ำดื่ม 3 ขั้นตอนจาก Pentair มาตรฐาน NSF/ANSI ลดแบคทีเรีย ไวรัส และซีสต์ได้ 99.9% พร้อมก๊อกน้ำดีไซน์สวยงาม',
         variants: []
+    },
+    {
+        id: 108,
+        name: 'ปั๊มน้ำ HITACHI WM-P250XX 250W',
+        price: 6200,
+        category: 'ปั๊มน้ำ',
+        image: 'https://images.unsplash.com/photo-1558981806-ec527fa84c39?w=500',
+        stock: 18,
+        sold: 75,
+        isFeatured: false,
+        variants: []
+    },
+    {
+        id: 109,
+        name: 'ถังเก็บน้ำ WAVE FLORA 1500L สีทราย',
+        price: 7890,
+        originalPrice: 9000,
+        category: 'ถังเก็บน้ำบนดิน PE',
+        image: 'https://images.unsplash.com/photo-1532996122724-e3c354a0b15b?w=500',
+        stock: 22,
+        sold: 91,
+        discount: 12,
+        isFeatured: true,
+        variants: []
+    },
+    {
+        id: 110,
+        name: 'เครื่องกรองน้ำใช้ STIEBEL ELTRON',
+        price: 3450,
+        category: 'เครื่องกรองน้ำและอุปกรณ์',
+        image: 'https://images.unsplash.com/photo-1616712398687-0b1a1b1b1b1b?w=500',
+        stock: 35,
+        sold: 150,
+        isFeatured: false,
+        variants: []
+    },
+    {
+        id: 111,
+        name: 'ถังดักไขมัน DOS G-TEK 15L',
+        price: 1290,
+        category: 'ถังดักไขมัน',
+        image: 'https://images.unsplash.com/photo-1584622781564-1d9876a13d00?w=500',
+        stock: 60,
+        sold: 450,
+        isFlashSale: true,
+        discount: 10,
+        variants: []
+    },
+    {
+        id: 112,
+        name: 'ถังบำบัดน้ำเสีย DOS HERO 1600L',
+        price: 8800,
+        category: 'ถังบำบัดน้ำเสีย',
+        image: 'https://images.unsplash.com/photo-1542013936693-1d56a6e81ed9?w=500',
+        stock: 12,
+        sold: 33,
+        isFeatured: false,
+        variants: []
+    },
+    {
+        id: 113,
+        name: 'เครื่องทำน้ำแข็ง Hoshizaki IM-30CNE-25',
+        price: 45000,
+        category: 'เครื่องทำน้ำแข็ง',
+        image: 'https://images.unsplash.com/photo-1579737196098-4b7b2b2b2b2b?w=500',
+        stock: 5,
+        sold: 8,
+        isFeatured: true,
+        variants: []
+    },
+    {
+        id: 114,
+        name: 'ตู้กดน้ำดื่ม SHARP SB-29S',
+        price: 2590,
+        category: 'ตู้กดน้ำดื่ม',
+        image: 'https://images.unsplash.com/photo-1521977637891-139998077460?w=500',
+        stock: 28,
+        sold: 180,
+        variants: []
+    },
+    {
+        id: 115,
+        name: 'ถังเก็บน้ำสแตนเลส ตราเพชร 2000L',
+        price: 12500,
+        originalPrice: 14000,
+        category: 'ถังเก็บน้ำสแตนเลส',
+        image: 'https://images.unsplash.com/photo-1565514020176-892eb5b3770a?w=500',
+        stock: 9,
+        sold: 19,
+        discount: 11,
+        variants: []
     }
+];
+
+const MOCK_CONTENT_ITEMS: ContentItem[] = [
+  { id: 'c-1', key: 'homepage.hero.title', value: 'BRAND DAY', type: 'text', description: 'Main title on the hero banner', updatedAt: new Date().toISOString() },
+  { id: 'c-2', key: 'homepage.hero.subtitle', value: 'ลดสูงสุด 80% + โค้ดลดเพิ่ม 15%', type: 'text', description: 'Subtitle on the hero banner', updatedAt: new Date().toISOString() },
+  { id: 'c-3', key: 'homepage.hero.image', value: 'https://images.unsplash.com/photo-1584622781564-1d9876a13d00?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80', type: 'image', description: 'Main background image for the hero banner', updatedAt: new Date().toISOString() },
+  { id: 'c-4', key: 'footer.copyright', value: '© {year} Home Product Center Public Company Limited. All rights reserved.', type: 'text', description: 'Copyright text in the footer. {year} is a placeholder.', updatedAt: new Date().toISOString() },
+  { id: 'c-5', key: 'promo.flash_sale.title', value: 'F⚡ASH SALE', type: 'rich-text', description: 'Title for the flash sale section', updatedAt: new Date().toISOString() },
 ];
 
 class Database {
     private products: Product[] = MOCK_PRODUCTS;
     private categories: Category[] = CATEGORIES;
     private categoryDetails: Record<number, CategoryDetail> = CATEGORY_DETAILS;
+    private contentItems: ContentItem[] = MOCK_CONTENT_ITEMS;
     private brands: Brand[] = [
         { id: 1, name: 'DOS', logo: 'https://via.placeholder.com/100?text=DOS' },
         { id: 2, name: 'Mitsubishi', logo: 'https://via.placeholder.com/100?text=Mitsubishi' },
@@ -531,6 +632,22 @@ class Database {
     getSavedBlocks(): SavedBlock[] { return this.savedBlocks; }
     addSavedBlock(b: SavedBlock) { this.savedBlocks.push(b); }
     deleteSavedBlock(id: string) { this.savedBlocks = this.savedBlocks.filter(x => x.id !== id); }
+    
+    // Content Items
+    getContentItems(): ContentItem[] { return this.contentItems; }
+    updateContentItem(item: ContentItem) {
+        const idx = this.contentItems.findIndex(x => x.id === item.id);
+        if (idx > -1) this.contentItems[idx] = { ...item, updatedAt: new Date().toISOString() };
+    }
+    queryContentItems(query: string) {
+        if (!query) return this.contentItems;
+        const q = query.toLowerCase();
+        return this.contentItems.filter(item => 
+            item.key.toLowerCase().includes(q) || 
+            item.value.toLowerCase().includes(q) ||
+            item.description.toLowerCase().includes(q)
+        );
+    }
 
     // Users & Orders (Mock)
     getUsers() { return this.users; }
