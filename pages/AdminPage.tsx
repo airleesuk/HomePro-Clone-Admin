@@ -160,6 +160,51 @@ export const AdminPage: React.FC = () => {
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
   const totalPages = Math.ceil(totalProductsCount / itemsPerPage);
 
+  const paginationRange = useMemo<(number | '...')[]>(() => {
+    const totalPageCount = totalPages;
+    const siblingCount = 1;
+    const DOTS = '...';
+
+    const range = (start: number, end: number) => {
+        let length = end - start + 1;
+        return Array.from({ length }, (_, idx) => idx + start);
+    };
+
+    const totalPageNumbers = siblingCount + 5;
+
+    if (totalPageNumbers >= totalPageCount) {
+        return range(1, totalPageCount);
+    }
+
+    const leftSiblingIndex = Math.max(productPage - siblingCount, 1);
+    const rightSiblingIndex = Math.min(productPage + siblingCount, totalPageCount);
+
+    const shouldShowLeftDots = leftSiblingIndex > 2;
+    const shouldShowRightDots = rightSiblingIndex < totalPageCount - 2;
+
+    const firstPageIndex = 1;
+    const lastPageIndex = totalPageCount;
+
+    if (!shouldShowLeftDots && shouldShowRightDots) {
+        let leftItemCount = 3 + 2 * siblingCount;
+        let leftRange = range(1, leftItemCount);
+        return [...leftRange, DOTS, totalPageCount];
+    }
+
+    if (shouldShowLeftDots && !shouldShowRightDots) {
+        let rightItemCount = 3 + 2 * siblingCount;
+        let rightRange = range(totalPageCount - rightItemCount + 1, totalPageCount);
+        return [firstPageIndex, DOTS, ...rightRange];
+    }
+
+    if (shouldShowLeftDots && shouldShowRightDots) {
+        let middleRange = range(leftSiblingIndex, rightSiblingIndex);
+        return [firstPageIndex, DOTS, ...middleRange, DOTS, lastPageIndex];
+    }
+    
+    return range(1, totalPageCount);
+  }, [totalProductsCount, itemsPerPage, productPage, totalPages]);
+
 
   const handleSelectAllOnPage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const currentPageIds = products.map(p => p.id);
@@ -844,7 +889,7 @@ export const AdminPage: React.FC = () => {
             {/* Pagination UI */}
             <div className="mt-6 flex justify-between items-center bg-white p-4 rounded-2xl shadow-sm border border-gray-100">
               <span className="text-xs text-gray-400">แสดง {indexOfFirstItem + 1} ถึง {Math.min(indexOfLastItem, totalProductsCount)} จากทั้งหมด {totalProductsCount} รายการ</span>
-              <div className="flex gap-2">
+              <div className="flex gap-2 items-center">
                  <button 
                   disabled={productPage === 1}
                   onClick={() => setProductPage(productPage - 1)}
@@ -852,17 +897,22 @@ export const AdminPage: React.FC = () => {
                  >
                    <ChevronLeft size={16} />
                  </button>
-                 {Array.from({length: totalPages}, (_, i) => i + 1).map(page => (
-                   <button 
-                    key={page}
-                    onClick={() => setProductPage(page)}
-                    className={`w-8 h-8 rounded-xl text-xs font-bold transition-all ${productPage === page ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'hover:bg-gray-50 border'}`}
-                   >
-                     {page}
-                   </button>
-                 ))}
+                 {paginationRange.map((page, index) => {
+                    if (typeof page === 'string') {
+                        return <span key={`dots-${index}`} className="w-8 h-8 flex items-center justify-center text-xs font-bold text-gray-400">...</span>;
+                    }
+                    return (
+                        <button 
+                            key={page}
+                            onClick={() => setProductPage(page)}
+                            className={`w-8 h-8 rounded-xl text-xs font-bold transition-all ${productPage === page ? 'bg-blue-600 text-white shadow-lg shadow-blue-100' : 'hover:bg-gray-50 border'}`}
+                        >
+                            {page}
+                        </button>
+                    )
+                 })}
                  <button 
-                  disabled={productPage === totalPages}
+                  disabled={productPage === totalPages || totalPages === 0}
                   onClick={() => setProductPage(productPage + 1)}
                   className="p-2 border rounded-xl disabled:opacity-30 hover:bg-gray-50 transition-colors"
                  >
